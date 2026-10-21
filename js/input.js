@@ -1,7 +1,7 @@
 'use strict';
 // Клавиатура, геймпады, сенсорное управление
 const Input = {
-  keys: {}, menuQ: [], rawQ: [], touch: { l: 0, r: 0, u: 0, d: 0, p: 0, k: 0, b: 0, sp1: 0, sp2: 0, fat: 0 }, padPrev: [{}, {}], anyKey: false,
+  keys: {}, menuQ: [], rawQ: [], touch: { l: 0, r: 0, u: 0, d: 0, p: 0, k: 0, b: 0, sp1: 0, sp2: 0, sp3: 0, fat: 0 }, padPrev: [{}, {}], anyKey: false,
   GAME_KEYS: new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Tab']),
   init() {
     addEventListener('keydown', e => {
@@ -33,18 +33,18 @@ const Input = {
   padState(i) {
     const p = this.pads && this.pads[i]; if (!p) return null;
     const b = n => p.buttons[n] && p.buttons[n].pressed ? 1 : 0;
-    return { l: p.axes[0] < -0.5 || b(14) ? 1 : 0, r: p.axes[0] > 0.5 || b(15) ? 1 : 0, u: p.axes[1] < -0.6 || b(12) ? 1 : 0, d: p.axes[1] > 0.6 || b(13) ? 1 : 0, p: b(2) | b(3), k: b(0), b: b(1) | b(6) | b(7), sp1: b(4), sp2: b(5), fat: 0 };
+    return { l: p.axes[0] < -0.5 || b(14) ? 1 : 0, r: p.axes[0] > 0.5 || b(15) ? 1 : 0, u: p.axes[1] < -0.6 || b(12) ? 1 : 0, d: p.axes[1] > 0.6 || b(13) ? 1 : 0, p: b(2), k: b(0), b: b(1) | b(6) | b(7), sp1: b(4), sp2: b(5), sp3: b(3), fat: 0 };
   },
   takeMenu() { const q = this.menuQ; this.menuQ = []; return q; },
   takeRaw() { const q = this.rawQ; this.rawQ = []; return q; }
 };
 // Раскладки можно переназначить в меню «Управление»; хранятся в localStorage
-const ACTIONS = ['l', 'r', 'u', 'd', 'p', 'k', 'b', 'sp1', 'sp2', 'fat'];
+const ACTIONS = ['l', 'r', 'u', 'd', 'p', 'k', 'b', 'sp1', 'sp2', 'sp3', 'fat'];
 const DEFAULT_KEYS = [
-  { l: 'KeyA', r: 'KeyD', u: 'KeyW', d: 'KeyS', p: 'KeyF', k: 'KeyG', b: 'KeyH', sp1: 'KeyR', sp2: 'KeyT', fat: 'KeyY' },
-  { l: 'ArrowLeft', r: 'ArrowRight', u: 'ArrowUp', d: 'ArrowDown', p: 'KeyK', k: 'KeyL', b: 'Semicolon', sp1: 'KeyO', sp2: 'KeyP', fat: 'KeyI' }
+  { l: 'KeyA', r: 'KeyD', u: 'KeyW', d: 'KeyS', p: 'KeyF', k: 'KeyG', b: 'KeyH', sp1: 'KeyR', sp2: 'KeyT', sp3: 'KeyE', fat: 'KeyY' },
+  { l: 'ArrowLeft', r: 'ArrowRight', u: 'ArrowUp', d: 'ArrowDown', p: 'KeyK', k: 'KeyL', b: 'Semicolon', sp1: 'KeyO', sp2: 'KeyP', sp3: 'KeyU', fat: 'KeyI' }
 ];
-const P2_NUMPAD = { Numpad1: 'p', Numpad2: 'k', Numpad3: 'b', Numpad4: 'sp1', Numpad5: 'sp2', Numpad6: 'fat' };
+const P2_NUMPAD = { Numpad1: 'p', Numpad2: 'k', Numpad3: 'b', Numpad4: 'sp1', Numpad5: 'sp2', Numpad6: 'fat', Numpad7: 'sp3' };
 const KEYS = [0, 1].map(i => Object.assign({}, DEFAULT_KEYS[i], Store.get('keys' + (i + 1), {})));
 const KEYMAP1 = {}, KEYMAP2 = {};
 function rebuildKeymaps() {
@@ -72,7 +72,7 @@ rebuildKeymaps();
 class PlayerInput {
   constructor(maps, pad, touch) { this.maps = maps; this.pad = pad; this.touch = touch; this.prev = {}; this.buf = []; }
   poll(frame, facing) {
-    const h = { l: 0, r: 0, u: 0, d: 0, p: 0, k: 0, b: 0, sp1: 0, sp2: 0, fat: 0 };
+    const h = { l: 0, r: 0, u: 0, d: 0, p: 0, k: 0, b: 0, sp1: 0, sp2: 0, sp3: 0, fat: 0 };
     for (const m of this.maps) for (const code in m) if (Input.keys[code]) h[m[code]] = 1;
     if (this.touch) for (const k in h) h[k] |= Input.touch[k];
     if (this.pad != null) { const ps = Input.padState(this.pad); if (ps) for (const k in h) h[k] |= ps[k]; }
@@ -81,7 +81,7 @@ class PlayerInput {
     for (const d of ['l', 'r', 'u', 'd']) if (pr[d]) this.buf.push({ d, f: frame });
     while (this.buf.length && frame - this.buf[0].f > 50) this.buf.shift();
     const c = { l: h.l, r: h.r, u: h.u, d: h.d, b: h.b, p: pr.p, k: pr.k, special: null, seq: null };
-    if (pr.sp1) c.special = 'proj'; else if (pr.sp2) c.special = 'dash'; else if (pr.fat) c.special = 'fatal';
+    if (pr.sp1) c.special = 'proj'; else if (pr.sp2) c.special = 'dash'; else if (pr.sp3) c.special = 'unique'; else if (pr.fat) c.special = 'fatal';
     if (c.p || c.k) c.seq = this.buf.map(e => e.d === 'u' ? 'U' : e.d === 'd' ? 'D' : ((e.d === 'r') === (facing === 1) ? 'F' : 'B'));
     return c;
   }

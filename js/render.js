@@ -35,8 +35,20 @@ class Raster {
     }
   }
   capsule(x1, y1, x2, y2, r1, r2, c) {
-    const dx = x2 - x1, dy = y2 - y1, n = Math.max(1, Math.ceil(Math.hypot(dx, dy) * 1.4));
-    for (let i = 0; i <= n; i++) { const t = i / n; this.disk(x1 + dx * t, y1 + dy * t, r1 + (r2 - r1) * t, c); }
+    // прямая растеризация «таблетки» по расстоянию до отрезка (быстрее, чем набор дисков)
+    const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy, rm = Math.max(r1, r2), w = this.w, d = this.d;
+    if (L2 < 0.01) { this.disk(x1, y1, rm, c); return; }
+    const X0 = Math.max(0, Math.floor(Math.min(x1, x2) - rm)), X1 = Math.min(w - 1, Math.ceil(Math.max(x1, x2) + rm));
+    const Y0 = Math.max(0, Math.floor(Math.min(y1, y2) - rm)), Y1 = Math.min(this.h - 1, Math.ceil(Math.max(y1, y2) + rm)), dr = r2 - r1;
+    for (let y = Y0; y <= Y1; y++) {
+      const py = y + 0.5 - y1;
+      for (let x = X0; x <= X1; x++) {
+        const px = x + 0.5 - x1;
+        let t = (px * dx + py * dy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const ex = px - dx * t, ey = py - dy * t, r = r1 + dr * t;
+        if (ex * ex + ey * ey <= r * r) d[y * w + x] = c;
+      }
+    }
   }
   line(x1, y1, x2, y2, c) {
     const n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1))));
@@ -62,23 +74,74 @@ class Raster {
         for (let x = Math.max(0, Math.ceil(xs[k] - 0.5)); x <= Math.min(this.w - 1, Math.floor(xs[k + 1] - 0.5)); x++) this.d[y * this.w + x] = c;
     }
   }
+  // Выборочный (цветной) контур: тёмный, но с оттенком соседнего пикселя;
+  // сверху/слева чуть светлее, снизу/справа — почти чистый тёмный
   outline(oc) {
     const w = this.w, h = this.h, d = this.d, t = this.tmp;
     t.set(d);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const i = y * w + x;
-      if (d[i] === 0 && ((x > 0 && d[i - 1]) || (x < w - 1 && d[i + 1]) || (y > 0 && d[i - w]) || (y < h - 1 && d[i + w]))) t[i] = oc;
+    const oR = oc & 255, oG = (oc >> 8) & 255, oB = (oc >> 16) & 255;
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) {
+        const i = row + x;
+        if (d[i] !== 0) continue;
+        let c = 0, k = 0;
+        if (x < w - 1 && d[i + 1]) { c = d[i + 1]; k = 0.34; }
+        else if (y < h - 1 && d[i + w]) { c = d[i + w]; k = 0.3; }
+        else if (x > 0 && d[i - 1]) { c = d[i - 1]; k = 0.12; }
+        else if (y > 0 && d[i - w]) { c = d[i - w]; k = 0.08; }
+        if (!c) continue;
+        const j = 1 - k;
+        t[i] = (0xff000000 | (((oB * j + ((c >> 16) & 255) * k) | 0) << 16) | (((oG * j + ((c >> 8) & 255) * k) | 0) << 8) | ((oR * j + (c & 255) * k) | 0)) >>> 0;
+      }
     }
     d.set(t);
+  }
+  // Затемнить уже нарисованные пиксели внутри «таблетки» (ambient occlusion / падающая тень)
+  shadowCapsule(x1, y1, x2, y2, r1, r2, amt = 0.7) {
+    const dx = x2 - x1, dy = y2 - y1, L2 = Math.max(0.01, dx * dx + dy * dy), rm = Math.max(r1, r2), w = this.w, d = this.d;
+    const X0 = Math.max(0, Math.floor(Math.min(x1, x2) - rm)), X1 = Math.min(w - 1, Math.ceil(Math.max(x1, x2) + rm));
+    const Y0 = Math.max(0, Math.floor(Math.min(y1, y2) - rm)), Y1 = Math.min(this.h - 1, Math.ceil(Math.max(y1, y2) + rm)), dr = r2 - r1;
+    const a = amt, rb = (1 - a) * 22, gb = (1 - a) * 10, bb = (1 - a) * 40;
+    for (let y = Y0; y <= Y1; y++) {
+      const py = y + 0.5 - y1;
+      for (let x = X0; x <= X1; x++) {
+        const i = y * w + x, c = d[i];
+        if (!c) continue;
+        const px = x + 0.5 - x1;
+        let t = (px * dx + py * dy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const ex = px - dx * t, ey = py - dy * t, r = r1 + dr * t;
+        if (ex * ex + ey * ey <= r * r)
+          d[i] = ((c & 0xff000000) | ((((c >> 16) & 255) * a + bb) << 16) | ((((c >> 8) & 255) * a + gb) << 8) | (((c & 255) * a + rb) | 0)) >>> 0;
+      }
+    }
+  }
+  // Ограничивающий прямоугольник непустых пикселей
+  bounds() {
+    const w = this.w, h = this.h, d = this.d;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) if (d[row + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; y1 = y; }
+    }
+    return x1 < 0 ? null : [x0, y0, x1 + 1, y1 + 1];
   }
   // Поворот другого растра (ближайший сосед) с опорной точкой
   blitRot(src, sx, sy, dx, dy, ang, flipY) {
     if (Math.abs(ang) < 0.14) ang = 0;
+    const bb = src.bounds(); if (!bb) return;
     const s = Math.sin(ang), co = Math.cos(ang), sw = src.w, sh = src.h, sd = src.d, w = this.w, d = this.d;
-    const R = Math.ceil(Math.hypot(Math.max(sx, sw - sx), Math.max(sy, sh - sy)));
-    for (let y = Math.max(0, Math.floor(dy - R)); y <= Math.min(this.h - 1, Math.ceil(dy + R)); y++) {
-      for (let x = Math.max(0, Math.floor(dx - R)); x <= Math.min(w - 1, Math.ceil(dx + R)); x++) {
-        const rx = x + 0.5 - dx, ry = y + 0.5 - dy;
+    // рамка содержимого, повёрнутая в координаты назначения
+    let mx0 = 1e9, my0 = 1e9, mx1 = -1e9, my1 = -1e9;
+    for (let k = 0; k < 4; k++) {
+      const u = (k & 1 ? bb[2] : bb[0]) - sx, v0 = (k & 2 ? bb[3] : bb[1]) - sy, v = flipY ? -v0 : v0;
+      const X = u * co - v * s, Y = u * s + v * co;
+      if (X < mx0) mx0 = X; if (X > mx1) mx1 = X; if (Y < my0) my0 = Y; if (Y > my1) my1 = Y;
+    }
+    for (let y = Math.max(0, Math.floor(dy + my0 - 1)); y <= Math.min(this.h - 1, Math.ceil(dy + my1 + 1)); y++) {
+      const ry = y + 0.5 - dy;
+      for (let x = Math.max(0, Math.floor(dx + mx0 - 1)); x <= Math.min(w - 1, Math.ceil(dx + mx1 + 1)); x++) {
+        const rx = x + 0.5 - dx;
         let u = rx * co + ry * s, v = -rx * s + ry * co;
         if (flipY) v = -v;
         const ix = Math.floor(u + sx), iy = Math.floor(v + sy);
@@ -155,19 +218,137 @@ function solvePose(ch, p) {
 }
 
 // ---------- примитивы с затенением ----------
+// Свет сверху-слева-спереди. Рампа материала: 0 тёмный контур, 1 тень, 2 база, 3 свет, 4 блик, 5 отражённый (холодный) свет
 const S = (col, k) => k ? shade(col, k) : col;
-function limb(R, a, b, r1, r2, col, k = 0) {
-  const base = S(col, k), dk = shade(base, -0.42), lt = shade(base, 0.32);
-  R.capsule(a.x, a.y, b.x, b.y, r1, r2, c32(dk));
-  R.capsule(a.x - 0.45, a.y - 0.55, b.x - 0.45, b.y - 0.55, r1 - 0.85, r2 - 0.85, c32(base));
-  if (r1 > 2.2) R.capsule(a.x - r1 * 0.4, a.y - r1 * 0.45, b.x - r2 * 0.4, b.y - r2 * 0.45, r1 * 0.24, r2 * 0.24, c32(lt));
+const LX = -0.5, LY = -0.62, LZ = 0.6;
+const _ramps = {};
+function ramp(col, k = 0) {
+  const key = col + k;
+  let r = _ramps[key];
+  if (r) return r;
+  const b = k ? shade(col, k) : col;
+  r = _ramps[key] = [c32(shade(b, -0.58)), c32(shade(b, -0.3)), c32(b), c32(shade(b, 0.24)), c32(shade(b, 0.5)), c32(mix(shade(b, -0.16), '#8fb4ff', 0.28))];
+  return r;
 }
-function ball(R, x, y, r, col, k = 0) {
-  const base = S(col, k);
-  R.disk(x, y, r, c32(shade(base, -0.42)));
-  R.disk(x - 0.4, y - 0.5, r - 0.8, c32(base));
-  if (r > 2) R.disk(x - r * 0.35, y - r * 0.4, r * 0.3, c32(shade(base, 0.35)));
+// tex(s, v, ti, t) — текстура: s — пиксели вдоль оси, v — поперёк (-1..1, + к «спине» отрезка), ti — тон;
+// возвращает индекс тона (0..5) или готовый цвет (> 15)
+function tube(R, a, b, r1, r2, col, k, tex, flat) {
+  const rp = typeof col === 'string' ? ramp(col, k || 0) : col;
+  const ax = a.x, ay = a.y, dx = b.x - ax, dy = b.y - ay, L2 = Math.max(0.01, dx * dx + dy * dy), len = Math.sqrt(L2);
+  const rm = Math.max(r1, r2), w = R.w, d = R.d, dr = r2 - r1, big = rm >= 2.6, huge = rm >= 5;
+  const X0 = Math.max(0, Math.floor(Math.min(ax, b.x) - rm)), X1 = Math.min(w - 1, Math.ceil(Math.max(ax, b.x) + rm));
+  const Y0 = Math.max(0, Math.floor(Math.min(ay, b.y) - rm)), Y1 = Math.min(R.h - 1, Math.ceil(Math.max(ay, b.y) + rm));
+  const qx = -dy / len, qy = dx / len;
+  for (let y = Y0; y <= Y1; y++) {
+    const py = y + 0.5 - ay;
+    for (let x = X0; x <= X1; x++) {
+      const px = x + 0.5 - ax;
+      let t = (px * dx + py * dy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const ex = px - dx * t, ey = py - dy * t, r = r1 + dr * t, d2 = ex * ex + ey * ey;
+      if (d2 > r * r) continue;
+      const dd = Math.sqrt(d2), nx = ex / r, ny = ey / r, n2 = nx * nx + ny * ny;
+      const I = nx * LX + ny * LY + (n2 < 1 ? Math.sqrt(1 - n2) : 0) * LZ;
+      let ti;
+      if (flat) ti = 2;
+      else if (r >= 1.7 && dd > r - 0.85 && I < 0.12) ti = 0;
+      else if (big && I > 0.94) ti = 4;
+      else if (I > 0.74) ti = 3;
+      else if (I > 0.3) ti = 2;
+      else if (huge && dd > r - 1.9 && I < 0) ti = 5;
+      else ti = 1;
+      if (tex) { ti = tex(t * len, (ex * qx + ey * qy) / r, ti, t); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
+      d[y * w + x] = rp[ti];
+    }
+  }
 }
+function sphere(R, cx, cy, r, col, k, tex) {
+  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, w = R.w, d = R.d, big = r >= 2.4;
+  if (r <= 0.6) { R.px(cx, cy, rp[2]); return; }
+  for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(R.h - 1, Math.ceil(cy + r)); y++) {
+    const ny0 = (y + 0.5 - cy);
+    for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(w - 1, Math.ceil(cx + r)); x++) {
+      const nx0 = x + 0.5 - cx, d2 = nx0 * nx0 + ny0 * ny0;
+      if (d2 > r * r) continue;
+      const dd = Math.sqrt(d2), nx = nx0 / r, ny = ny0 / r, n2 = nx * nx + ny * ny;
+      const I = nx * LX + ny * LY + Math.sqrt(Math.max(0, 1 - n2)) * LZ;
+      let ti;
+      if (r >= 1.7 && dd > r - 0.85 && I < 0.12) ti = 0;
+      else if (big && I > 0.94) ti = 4;
+      else if (I > 0.74) ti = 3;
+      else if (I > 0.3) ti = 2;
+      else if (r >= 5 && dd > r - 1.8 && I < 0) ti = 5;
+      else ti = 1;
+      if (tex) { ti = tex(nx0, ny0, ti); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
+      d[y * w + x] = rp[ti];
+    }
+  }
+}
+// Эллипсоид (освещён как сфера)
+function ovoid(R, cx, cy, rx, ry, col, k, tex) {
+  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, w = R.w, d = R.d, big = Math.min(rx, ry) >= 2.4, ek = (1 - 0.9 / Math.min(rx, ry)) ** 2;
+  for (let y = Math.max(0, Math.floor(cy - ry)); y <= Math.min(R.h - 1, Math.ceil(cy + ry)); y++) {
+    const ny = (y + 0.5 - cy) / ry;
+    for (let x = Math.max(0, Math.floor(cx - rx)); x <= Math.min(w - 1, Math.ceil(cx + rx)); x++) {
+      const nx = (x + 0.5 - cx) / rx, n2 = nx * nx + ny * ny;
+      if (n2 > 1) continue;
+      const I = nx * LX + ny * LY + Math.sqrt(1 - n2) * LZ;
+      const edge = n2 > ek;
+      let ti;
+      if (edge && Math.min(rx, ry) >= 1.7 && I < 0.12) ti = 0;
+      else if (big && I > 0.94) ti = 4;
+      else if (I > 0.74) ti = 3;
+      else if (I > 0.3) ti = 2;
+      else ti = 1;
+      if (tex) { ti = tex(x + 0.5 - cx, y + 0.5 - cy, ti); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
+      d[y * w + x] = rp[ti];
+    }
+  }
+}
+// Пластина-многоугольник с фаской: светлая грань к свету, тёмная — от света
+function plate(R, pts, col, k, tex) {
+  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, n = pts.length, w = R.w, d = R.d;
+  let area = 0, minY = 1e9, maxY = -1e9;
+  for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; area += a[0] * b[1] - b[0] * a[1]; if (a[1] < minY) minY = a[1]; if (a[1] > maxY) maxY = a[1]; }
+  const sg = area > 0 ? 1 : -1, E = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n], ex = b[0] - a[0], ey = b[1] - a[1], l = Math.hypot(ex, ey) || 1;
+    const nx = ey / l * sg, ny = -ex / l * sg; // наружная нормаль
+    const L = nx * LX + ny * LY;
+    E.push([a[0], a[1], ex / l, ey / l, l, L > 0.25 ? 3 : L < -0.3 ? 0 : 1]);
+  }
+  const xs = [];
+  for (let y = Math.max(0, Math.floor(minY)); y <= Math.min(R.h - 1, Math.ceil(maxY)); y++) {
+    const sy = y + 0.5; xs.length = 0;
+    for (let i = 0; i < n; i++) {
+      const a = pts[i], b = pts[(i + 1) % n];
+      if ((a[1] <= sy && b[1] > sy) || (b[1] <= sy && a[1] > sy)) xs.push(a[0] + (sy - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+    }
+    xs.sort((p, q) => p - q);
+    for (let q = 0; q + 1 < xs.length; q += 2)
+      for (let x = Math.max(0, Math.ceil(xs[q] - 0.5)); x <= Math.min(w - 1, Math.floor(xs[q + 1] - 0.5)); x++) {
+        const sx = x + 0.5;
+        let best = 1.05, bt = 2;
+        for (let e = 0; e < n; e++) {
+          const Ee = E[e], px = sx - Ee[0], py = sy - Ee[1];
+          let t = px * Ee[2] + py * Ee[3]; t = t < 0 ? 0 : t > Ee[4] ? Ee[4] : t;
+          const qx = px - Ee[2] * t, qy = py - Ee[3] * t, dd = qx * qx + qy * qy;
+          if (dd < best) { best = dd; bt = Ee[5]; }
+        }
+        let ti = bt;
+        if (tex) { ti = tex(sx, sy, ti); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
+        d[y * w + x] = rp[ti];
+      }
+  }
+}
+// совместимость: старые limb/ball теперь объёмные
+function limb(R, a, b, r1, r2, col, k = 0, tex) { tube(R, a, b, r1, r2, col, k, tex); }
+function ball(R, x, y, r, col, k = 0, tex) { sphere(R, x, y, r, col, k, tex); }
+// мягкая тень от детали на уже нарисованное (свет сверху-слева → тень вниз-вправо)
+function ao(R, a, b, r1, r2, amt = 0.72, ox = 1.1, oy = 1.3) { R.shadowCapsule(a.x + ox, a.y + oy, b.x + ox, b.y + oy, r1, r2, amt); }
+// пиксель/линия в системе координат корпуса
+function TPx(R, J, u, v, c) { const p = TP(J, u, v); R.px(p.x, p.y, c); }
+function TL(R, J, u1, v1, u2, v2, c) { const a = TP(J, u1, v1), b = TP(J, u2, v2); R.line(a.x, a.y, b.x, b.y, c); }
+function TPoly(J, arr) { return arr.map(q => { const p = TP(J, q[0], q[1]); return [p.x, p.y]; }); }
 function torsoPerp(J) { return { x: Math.cos(J.ta), y: Math.sin(J.ta) }; }   // поперёк корпуса (вперёд)
 function torsoAxis(J) { return { x: Math.sin(J.ta), y: -Math.cos(J.ta) }; }   // вдоль корпуса (вверх)
 // точка в системе корпуса: u — вперёд, v — вверх от бедра
@@ -177,44 +358,66 @@ const HEAD_R = new Raster(56, 56);
 const WEP_R = new Raster(96, 40);
 
 // ---------- части тела по умолчанию ----------
+function drawFist(R, el, hd, r, col, k) {
+  const rp = ramp(col, k), dx = hd.x - el.x, dy = hd.y - el.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+  sphere(R, hd.x, hd.y, r, rp);
+  if (r < 2.2) return;
+  // костяшки и большой палец
+  const fx = hd.x + ux * (r - 1.5), fy = hd.y + uy * (r - 1.5), qx = -uy, qy = ux;
+  R.line(fx + qx * (r - 1.2), fy + qy * (r - 1.2), fx - qx * (r - 1.6), fy - qy * (r - 1.6), rp[1]);
+  R.px(hd.x - qx * 1.4 + ux * 0.3, hd.y - qy * 1.4 + uy * 0.3, rp[3]);
+}
 function drawArm(R, ch, J, side, P, k, f) {
-  const m = ch.build.limb, sh = J['sh' + side], el = J['el' + side], hd = J['hd' + side];
-  limb(R, sh, el, 3.1 * m, 2.6 * m, P.sleeve || P.skin, k);
-  limb(R, el, hd, 2.6 * m, 2.2 * m, P.fore || P.skin, k);
-  if (P.bracer) limb(R, lp(el, hd, 0.35), lp(el, hd, 0.85), 2.8 * m, 2.6 * m, P.bracer, k);
+  const m = ch.build.limb, sh = J['sh' + side], el = J['el' + side], hd = J['hd' + side], D = ch.draw || {}, tx = D.tex || {};
+  tube(R, sh, el, 3.1 * m, 2.6 * m, P.sleeve || P.skin, k, tx.sleeve);
+  ao(R, el, lp(el, hd, 0.3), 2.4 * m, 2.3 * m, 0.8, 0.6, 0.8);
+  tube(R, el, hd, 2.6 * m, 2.2 * m, P.fore || P.skin, k, tx.fore);
+  if (P.bracer) tube(R, lp(el, hd, 0.35), lp(el, hd, 0.85), 2.8 * m, 2.6 * m, P.bracer, k, tx.bracer);
+  if (D.arm) D.arm(R, J, side, P, k, sh, el, hd);
   if (side === 'F' && ch.weapon) drawWeapon(R, ch, J, P, f);
   if (ch.fin) { // плавник вместо кулака
-    const d = Math.atan2(hd.y - el.y, hd.x - el.x);
-    R.poly([[hd.x + Math.cos(d - 1.3) * 2.5, hd.y + Math.sin(d - 1.3) * 2.5], [hd.x + Math.cos(d) * 5.5, hd.y + Math.sin(d) * 5.5], [hd.x + Math.cos(d + 1.3) * 2.5, hd.y + Math.sin(d + 1.3) * 2.5]], c32(S(shade(P.glove || P.skin, -0.2), k)));
-    ball(R, hd.x, hd.y, 2.6 * m, P.glove || P.skin, k);
-  } else ball(R, hd.x, hd.y, 2.9 * m, P.glove || P.skin, k);
+    const d = Math.atan2(hd.y - el.y, hd.x - el.x), gc = P.glove || P.skin;
+    plate(R, [[hd.x + Math.cos(d - 1.3) * 2.6, hd.y + Math.sin(d - 1.3) * 2.6], [hd.x + Math.cos(d - 0.15) * 6.5, hd.y + Math.sin(d - 0.15) * 6.5], [hd.x + Math.cos(d + 0.5) * 4.5, hd.y + Math.sin(d + 0.5) * 4.5], [hd.x + Math.cos(d + 1.3) * 2.6, hd.y + Math.sin(d + 1.3) * 2.6]], gc, k - 0.1);
+    const c = ramp(gc, k);
+    R.line(hd.x, hd.y, hd.x + Math.cos(d - 0.2) * 5, hd.y + Math.sin(d - 0.2) * 5, c[1]);
+    sphere(R, hd.x, hd.y, 2.6 * m, gc, k);
+  } else drawFist(R, el, hd, 2.9 * m, P.glove || P.skin, k);
 }
 function drawLeg(R, ch, J, side, P, k) {
-  const m = ch.build.limb, hp = J['hip' + side], kn = J['kn' + side], ft = J['ft' + side];
-  limb(R, hp, kn, 3.7 * m, 3.1 * m, P.pants, k);
-  limb(R, kn, ft, 3.1 * m, 2.5 * m, P.pants, k);
+  const m = ch.build.limb, hp = J['hip' + side], kn = J['kn' + side], ft = J['ft' + side], D = ch.draw || {}, tx = D.tex || {};
+  tube(R, hp, kn, 3.7 * m, 3.1 * m, P.pants, k, tx.pants);
+  ao(R, kn, lp(kn, ft, 0.25), 2.9 * m, 2.8 * m, 0.82, 0.5, 0.9);
+  tube(R, kn, ft, 3.1 * m, 2.5 * m, P.shin || P.pants, k, tx.shin || tx.pants);
   const sd = { x: (ft.x - kn.x), y: (ft.y - kn.y) }, l = Math.hypot(sd.x, sd.y) || 1;
   const fd = { x: sd.y / l, y: -sd.x / l };
   const toe = { x: ft.x + fd.x * 4.6 * m, y: ft.y + fd.y * 4.6 * m };
-  if (P.boots) limb(R, lp(kn, ft, ch.bootTop || 0.45), ft, 3.1 * m, 2.7 * m, P.boots, k);
-  limb(R, { x: ft.x - fd.x * 0.8, y: ft.y - fd.y * 0.8 }, toe, 2.5 * m, 1.9 * m, P.shoes || P.boots || P.pants, k);
-  if (P.sole) R.capsule(ft.x - fd.x + sd.x / l * 1.6, ft.y - fd.y + sd.y / l * 1.6, toe.x + sd.x / l * 1.2, toe.y + sd.y / l * 1.2, 0.9, 0.9, c32(S(P.sole, k)));
-  if (P.stripe) R.line(ft.x - fd.x * 0.5, ft.y - fd.y * 0.5 - 1, toe.x - fd.x * 1.5, toe.y - fd.y * 1.5 - 0.5, c32(S(P.stripe, k)));
+  if (P.boots) tube(R, lp(kn, ft, ch.bootTop || 0.45), ft, 3.1 * m, 2.7 * m, P.boots, k, tx.boots);
+  const sc = P.shoes || P.boots || P.pants;
+  tube(R, { x: ft.x - fd.x * 0.8, y: ft.y - fd.y * 0.8 }, toe, 2.5 * m, 1.9 * m, sc, k, tx.shoes);
+  const ux = sd.x / l, uy = sd.y / l;
+  if (P.sole) R.capsule(ft.x - fd.x * 1.4 + ux * 1.6, ft.y - fd.y * 1.4 + uy * 1.6, toe.x + ux * 1.2, toe.y + uy * 1.2, 0.9, 0.9, ramp(P.sole, k)[2]);
+  else R.line(ft.x - fd.x * 1.6 + ux * 2.1, ft.y - fd.y * 1.6 + uy * 2.1, toe.x + ux * 1.4 - fd.x * 0.6, toe.y + uy * 1.4 - fd.y * 0.6, ramp(sc, k)[0]);
+  if (P.stripe && k > -0.2) R.line(ft.x - fd.x * 0.5, ft.y - fd.y * 0.5 - 1, toe.x - fd.x * 1.5, toe.y - fd.y * 1.5 - 0.5, ramp(P.stripe, k)[2]);
+  if (D.leg) D.leg(R, J, side, P, k, hp, kn, ft, toe);
 }
 function drawTorsoDefault(R, ch, J, P) {
-  const b = ch.build;
-  limb(R, J.hip, J.neck, b.waist, b.chest, P.main);
+  const b = ch.build, tx = (ch.draw && ch.draw.tex) || ch.tex || {};
+  tube(R, J.hip, J.neck, b.waist, b.chest, P.main, 0, tx.main);
   if (P.belt) {
     const a = TP(J, -b.waist + 0.5, 1.5), c = TP(J, b.waist - 0.5, 1.5);
-    R.capsule(a.x, a.y, c.x, c.y, 1.4, 1.4, c32(P.belt));
-    if (P.beltKnot) { const kk = TP(J, b.waist - 1, 0); R.capsule(kk.x, kk.y, kk.x + 1, kk.y + 5, 1, 0.7, c32(P.belt)); }
+    tube(R, a, c, 1.5, 1.5, P.belt, 0);
+    if (P.beltKnot) {
+      const kk = TP(J, b.waist - 1, 1.2), rp = ramp(P.belt);
+      sphere(R, kk.x, kk.y, 1.7, rp);
+      tube(R, kk, TP(J, b.waist + 0.6, -4), 1, 0.8, rp); tube(R, kk, TP(J, b.waist - 1.8, -5.5), 1, 0.7, rp);
+    }
   }
 }
 function drawNeck(R, ch, J, P) {
   const b = ch.build, base = TP(J, 0, b.torso - 1);
-  limb(R, base, lp(base, J.head, 0.6), 2.4, 2.2, P.neckCol || P.skin);
+  tube(R, base, lp(base, J.head, 0.6), 2.4, 2.2, P.neckCol || P.skin, -0.12);
 }
-function drawHeadDefault(H, P) { const C = 28; ball(H, C, C, 6, P.skin); }
+function drawHeadDefault(H, P) { const C = 28; sphere(H, C, C, 6, P.skin); }
 
 function drawWeapon(R, ch, J, P, f) {
   const el = J.elF, hd = J.hdF;
@@ -225,26 +428,57 @@ function drawWeapon(R, ch, J, P, f) {
 }
 const WEAPONS = {
   katana(Rw, P) {
-    Rw.rect(8, 19, 10, 2, c32('#2a2030')); for (let x = 9; x < 18; x += 2) Rw.px(x, 19, c32('#c9a227'));
-    Rw.rect(17, 17, 2, 6, c32('#c9a227'));
-    for (let x = 19; x < 52; x++) { const yo = Math.round(((x - 19) / 33) ** 2 * -2); Rw.px(x, 19 + yo, c32('#f2f7ff')); Rw.px(x, 20 + yo, c32('#9fb3c8')); if (x % 3 === 0) Rw.px(x, 21 + yo, c32('#57e1ff')); }
-    Rw.px(52, 17, c32('#ffffff'));
+    // рукоять с оплёткой ито, золотая цуба и хабаки
+    Rw.rect(6, 18, 12, 3, c32('#1c1626'));
+    for (let x = 7; x < 17; x++) { const ph = (x - 7) % 3; Rw.px(x, 18 + (ph === 0 ? 0 : ph === 1 ? 1 : 2), c32('#b9b2c8')); if (ph === 1) Rw.px(x, 19, c32('#e6e0f0')); }
+    Rw.rect(5, 18, 2, 3, c32('#c9a227')); Rw.px(5, 18, c32('#fff1a8'));
+    Rw.rect(17, 16, 2, 7, c32('#a07a18')); Rw.rect(17, 16, 1, 6, c32('#e3b341')); Rw.px(17, 16, c32('#fff1a8')); Rw.px(18, 22, c32('#5a400c'));
+    Rw.rect(19, 18, 2, 3, c32('#e3b341')); Rw.px(19, 18, c32('#fff1a8'));
+    // клинок: обух, тело, линия хамона, режущая кромка с неоновым свечением
+    for (let x = 21; x < 54; x++) {
+      const yo = Math.round(((x - 19) / 35) ** 2 * -2.5);
+      Rw.px(x, 18 + yo, c32('#6f7c8f'));
+      Rw.px(x, 19 + yo, c32(x > 26 && x < 31 ? '#ffffff' : '#dfe7f1'));
+      const hw = Math.sin(x * 0.9) > 0.2;
+      Rw.px(x, 20 + yo, c32(hw ? '#ffffff' : '#b5c4d6'));
+      Rw.px(x, 21 + yo, c32(x % 4 === 0 ? '#9ff0ff' : '#eef6ff'));
+      if (x % 6 === 2) Rw.px(x, 22 + yo, c32('#57e1ff'));
+    }
+    Rw.px(54, 16, c32('#dfe7f1')); Rw.px(54, 17, c32('#ffffff')); Rw.px(55, 16, c32('#ffffff')); Rw.px(54, 18, c32('#eef6ff'));
   },
   axe(Rw, P) {
-    Rw.rect(2, 19, 34, 3, c32('#6a4422')); Rw.rect(2, 19, 34, 1, c32('#8a5a30'));
-    Rw.rect(5, 18, 2, 5, c32('#3a2a1a')); Rw.rect(12, 18, 2, 5, c32('#3a2a1a'));
-    Rw.poly([[28, 18], [36, 16], [38, 7], [43, 9], [44, 24], [40, 32], [35, 30], [36, 23], [28, 23]], c32('#59616b'));
-    Rw.poly([[30, 19], [35, 18], [38, 10], [41, 11], [42, 23], [39, 29], [37, 28], [37, 22], [30, 22]], c32('#aab3bd'));
-    Rw.line(42, 10, 43, 24, c32('#eef3f8')); Rw.line(43, 24, 40, 30, c32('#eef3f8'));
+    // топорище: дерево с волокнами и кожаная обмотка
+    Rw.rect(2, 19, 34, 3, c32('#6a4422')); Rw.rect(2, 19, 34, 1, c32('#94643a')); Rw.rect(2, 21, 34, 1, c32('#45280f'));
+    for (let x = 4; x < 34; x += 5) Rw.px(x, 20, c32('#7d522c'));
+    for (let x = 8; x < 17; x++) { Rw.px(x, 19 + ((x >> 1) & 1) * 2, c32('#2e1f12')); Rw.px(x, 20, c32((x & 1) ? '#5a4030' : '#3a2a1a')); }
+    Rw.rect(1, 18, 2, 5, c32('#8e979f')); Rw.px(1, 18, c32('#e6ebf0'));
+    // лезвие с фаской и рунами
+    Rw.poly([[27, 17], [36, 16], [38, 7], [43, 9], [44, 24], [40, 32], [35, 30], [36, 24], [27, 24]], c32('#3f4650'));
+    Rw.poly([[29, 18], [35, 17.5], [38, 10], [41.5, 11], [42.5, 23.5], [39.5, 29.5], [37, 28.5], [37, 23], [29, 23]], c32('#8e98a3'));
+    Rw.poly([[31, 18.5], [36, 18], [38.5, 12], [40, 13], [40.5, 22], [38.5, 26], [38, 22], [31, 22]], c32('#b4bdc7'));
+    Rw.line(42, 10, 43, 24, c32('#f4f8fb')); Rw.line(43, 24, 40, 31, c32('#f4f8fb')); Rw.line(41, 10, 42, 12, c32('#ffffff'));
+    Rw.rect(28, 17, 3, 7, c32('#59616b')); Rw.rect(28, 17, 3, 1, c32('#aab3bd'));
+    Rw.px(29, 18, c32('#e3b341')); Rw.px(29, 22, c32('#e3b341'));
+    const rn = c32('#9fd8ff');
+    Rw.line(38, 14, 38, 18, rn); Rw.px(39, 15, rn); Rw.px(39, 17, rn);
+    Rw.line(39, 21, 39, 25, rn); Rw.px(38, 22, rn); Rw.px(40, 23, rn);
   },
   bat(Rw, P) {
-    Rw.capsule(4, 20, 40, 20, 1.3, 3.6, c32('#8a5a30'));
-    Rw.capsule(4, 19.5, 40, 19.3, 0.8, 2.7, c32('#d9a66a'));
-    Rw.capsule(10, 18.6, 38, 18, 0.3, 0.9, c32('#f0cf9a'));
-    Rw.rect(3, 18, 2, 5, c32('#5a3a1e'));
+    // бита: волокна дерева, обмотка ручки, гвозди
+    Rw.capsule(3, 20, 41, 19.6, 1.4, 3.9, c32('#5a361a'));
+    tube(Rw, { x: 3, y: 20 }, { x: 41, y: 19.6 }, 1.4, 3.6, '#c48c52', 0, (s, v, ti) => {
+      if (ti < 2) return ti;
+      const g = v * 3 + Math.sin(s * 0.35) * 0.6;
+      return (Math.abs(g - Math.round(g)) < 0.13 && s > 10) ? 1 : ti;
+    });
+    Rw.rect(2, 18, 9, 4, c32('#2a2030'));
+    for (let x = 3; x < 11; x += 2) { Rw.px(x, 18, c32('#5a4a60')); Rw.px(x + 1, 21, c32('#5a4a60')); }
+    Rw.disk(2, 20, 2.2, c32('#5a361a')); Rw.px(1, 19, c32('#c48c52'));
+    const nh = c32('#e6ebf0'), ns = c32('#7d868f');
+    for (const [x, y] of [[29, 15], [34, 24], [38, 15], [33, 15]]) { Rw.px(x, y, nh); Rw.px(x, y + (y < 20 ? -1 : 1), ns); }
   },
   staff(Rw, P) {
-    Rw.rect(-2, 19, 44, 2, c32('#3b2440'));
+    Rw.rect(-2, 19, 44, 2, c32('#3b2440')); Rw.rect(-2, 19, 44, 1, c32('#5b3a64'));
     Rw.disk(42, 19.5, 3.2, c32('#2a1630')); Rw.disk(42, 19.5, 2.2, c32('#c06bff')); Rw.px(41, 18, c32('#ffffff'));
   }
 };
@@ -272,21 +506,26 @@ function renderFighter(R, ch, pose, f) {
   for (const k in J0) J[k] = typeof J0[k] === 'object' ? { x: J0[k].x + ox, y: J0[k].y + oy } : J0[k];
   const t = (f && f.anim) || 0, ctx = { t, pose, f };
   if (f && f.skeleton) { drawSkeleton(R, ch, J); R.outline(c32('#120a10')); R.flush(); return J; }
-  const D = ch.draw || {};
+  const D = ch.draw || {}, m = ch.build.limb;
   if (D.back) D.back(R, J, P, ctx);
   drawLeg(R, ch, J, 'B', P, -0.3);
   drawArm(R, ch, J, 'B', P, -0.3, null);
   if (D.torso) D.torso(R, J, P, ctx); else drawTorsoDefault(R, ch, J, P);
   if (D.midBack) D.midBack(R, J, P, ctx);
+  // падающие тени: передняя нога на корпус/заднюю ногу
+  ao(R, J.hipF, J.knF, 3.7 * m, 3.1 * m); ao(R, J.knF, J.ftF, 3.1 * m, 2.5 * m);
   drawLeg(R, ch, J, 'F', P, 0);
   if (D.mid) D.mid(R, J, P, ctx);
   if (!ch.headless) {
+    ao(R, J.head, J.head, ch.build.headR * 0.85, ch.build.headR * 0.85, 0.75, 1, 2.2);
     drawNeck(R, ch, J, P);
     HEAD_R.clear();
     (D.head || drawHeadDefault)(HEAD_R, P, ctx);
     R.blitRot(HEAD_R, 28, 28, J.head.x, J.head.y, J.ha);
   }
   if (D.preArm) D.preArm(R, J, P, ctx);
+  // тень от передней руки на корпус
+  ao(R, J.shF, J.elF, 3.1 * m, 2.6 * m, 0.7); ao(R, J.elF, J.hdF, 2.6 * m, 2.9 * m, 0.7);
   drawArm(R, ch, J, 'F', P, 0, pose);
   if (D.front) D.front(R, J, P, ctx);
   R.outline(c32(P.outline || '#140c18'));

@@ -11,7 +11,12 @@ const MOVES = {
   airP: { st: 3, act: 8, rec: 4, dmg: 7, hs: 16, kb: 2, bs: 8, box: [4, -46, 20, 18], air: true, snd: 'punch' },
   airK: { st: 4, act: 10, rec: 4, dmg: 9, hs: 18, kb: 3, bs: 9, box: [4, -40, 26, 18], air: true, snd: 'kick' },
   throw: { st: 3, act: 2, rec: 22, dmg: 12, box: [4, -58, 18, 44], throw: true },
+  backfist: { st: 8, act: 4, rec: 14, dmg: 9, hs: 20, bs: 11, kb: 4, box: [4, -60, 26, 12], snd: 'heavy', heavy: true, spin: true, chain: ['kick', 'sweep'] },
+  pushkick: { st: 7, act: 4, rec: 15, dmg: 7, hs: 16, bs: 10, kb: 7.5, box: [6, -46, 28, 14], snd: 'kick' },
+  overhead: { st: 13, act: 4, rec: 14, dmg: 10, hs: 20, bs: 12, kb: 3, box: [6, -66, 22, 36], snd: 'heavy', heavy: true, overhead: true },
+  divekick: { st: 3, act: 40, rec: 6, dmg: 9, hs: 18, kb: 3.5, bs: 10, box: [2, -26, 24, 22], air: true, dive: true, snd: 'kick' },
 };
+MOVES.jab.chain.push('backfist', 'overhead', 'pushkick'); MOVES.cross.chain.push('backfist', 'pushkick'); MOVES.kick.chain.push('pushkick');
 // для оружия чуть дальше достаёт
 for (const k of ['jab', 'cross']) MOVES[k + 'W'] = Object.assign({}, MOVES[k], { box: [6, -58, 34, 22], dmg: MOVES[k].dmg + 1, snd: 'slashHit' });
 
@@ -29,7 +34,7 @@ const DASH = {
 };
 
 class Fighter {
-  constructor(ch, idx, game) { this.ch = ch; this.idx = idx; this.g = game; this.R = new Raster(SPR_W, SPR_H); this.reset(STAGE_W / 2, 1); }
+  constructor(ch, idx, game) { this.ch = ch; this.idx = idx; this.g = game; this.R = new Raster(SPR_W, SPR_H); this.taken = 0; this.reset(STAGE_W / 2, 1); }
   reset(x, facing) {
     Object.assign(this, {
       x, y: GROUND, vx: 0, vy: 0, facing, hp: 100, dhp: 100, st: 'idle', t: 0, anim: randi(0, 100), move: null, moveName: '', mt: 0, hitDone: false,
@@ -74,12 +79,13 @@ class Fighter {
       case 'idle': case 'walk': case 'crouch': case 'block': case 'cblock': this.neutral(ctl, fwd, back); break;
       case 'jsquat': if (this.t >= 3) { this.vy = JUMP_V; this.vx = this.jdir * 2.5; this.airAttacked = false; this.setSt('jump'); Sound.play('jump'); } break;
       case 'jump':
-        if (ctl && !this.airAttacked) { if (ctl.p) { this.startMove('airP'); break; } if (ctl.k) { this.startMove('airK'); break; } }
+        if (ctl && !this.airAttacked) { if (ctl.p) { this.startMove('airP'); break; } if (ctl.k) { if (ctl.d && this.vy > -3) { this.startMove('divekick'); this.vx = this.facing * 3.8; break; } this.startMove('airK'); break; } }
         this.physics(); if (!this.air && this.t > 2) this.land(); break;
       case 'land': if (this.t >= 5) this.toNeutral(); break;
       case 'attack': this.attackUpdate(ctl, fwd, back); break;
       case 'special': this.specialUpdate(); break;
       case 'dash': this.dashUpdate(); break;
+      case 'unique': this.uniqueUpdate(); break;
       case 'hit': case 'bstun': this.vx *= 0.82; this.x += this.vx; if (this.air) this.physics(); if (--this.stun <= 0) this.toNeutral(); break;
       case 'fall':
         this.physics();
@@ -104,11 +110,14 @@ class Fighter {
       if (ctl.d) { this.startMove('uppercut'); return; }
       const o = this.opp;
       if (fwd && Math.abs(o.x - this.x) < 34 && o.canBeThrown()) { this.startMove('throw'); return; }
+      if (back) { this.startMove('backfist'); return; }
+      if (fwd) { this.startMove('overhead'); return; }
       this.startMove(this.altPunch ? 'cross' : 'jab'); this.altPunch = !this.altPunch; return;
     }
     if (ctl.k) {
       if (ctl.d) { this.startMove('sweep'); return; }
       if (back) { this.startMove('roundhouse'); return; }
+      if (fwd) { this.startMove('pushkick'); return; }
       this.startMove('kick'); return;
     }
     // блок кнопкой или удержанием «назад», когда соперник атакует
@@ -120,7 +129,7 @@ class Fighter {
     if (back) { this.setStIf('walk'); this.x -= 1.4 * this.facing; this.walkDir = -1; return; }
     this.setStIf('idle');
   }
-  isThreat() { return this.st === 'attack' || this.st === 'dash' || (this.st === 'special' && this.mt < 12) || this.st === 'jsquat'; }
+  isThreat() { return this.st === 'attack' || this.st === 'dash' || (this.st === 'special' && this.mt < 12) || (this.st === 'unique' && this.mt < 24) || this.st === 'jsquat'; }
   startMove(name) {
     if (this.ch.weapon && (name === 'jab' || name === 'cross')) name += 'W';
     this.move = MOVES[name]; this.moveName = name.replace('W', ''); this.mt = 0; this.hitDone = false; this.setSt('attack');
@@ -129,22 +138,25 @@ class Fighter {
   }
   attackUpdate(ctl, fwd, back) {
     const m = this.move; this.mt++;
-    if (m.air) { this.physics(); if (!this.air) { this.land(); return; } }
+    if (m.dive) this.vy = 4.6;
+    if (m.spin) this.visFlip = this.mt < m.st * 0.7;
+    if (m.air) { this.physics(); if (!this.air) { this.visFlip = false; this.land(); return; } }
     else { this.vx *= 0.8; this.x += this.vx; if (this.mt === m.st && !m.throw) this.x += this.facing * 2; }
     if (this.hitDone && ctl && this.mt >= m.st + 1 && !m.air) {
       if (ctl.special && this.trySpecial(ctl.special)) return;
       let next = null;
-      if (ctl.p) next = ctl.d ? 'uppercut' : (this.moveName === 'jab' ? 'cross' : 'jab');
-      else if (ctl.k) next = ctl.d ? 'sweep' : (back ? 'roundhouse' : 'kick');
+      if (ctl.p) next = ctl.d ? 'uppercut' : back ? 'backfist' : fwd ? 'overhead' : (this.moveName === 'jab' ? 'cross' : 'jab');
+      else if (ctl.k) next = ctl.d ? 'sweep' : back ? 'roundhouse' : fwd ? 'pushkick' : 'kick';
       if (next && m.chain && m.chain.includes(next)) { this.startMove(next); return; }
     }
-    if (this.mt >= m.st + m.act + m.rec) { if (m.air && this.air) this.setSt('jump'); else this.toNeutral(); }
+    if (this.mt >= m.st + m.act + m.rec) { this.visFlip = false; if (m.air && this.air) this.setSt('jump'); else this.toNeutral(); }
   }
   trySpecial(kind) {
     if (this.air) return false;
     if (kind === 'proj') { if (this.g.projOf(this)) return false; this.face(); this.setSt('special'); this.mt = 0; Sound.play('cast'); return true; }
     if (kind === 'dash') { this.face(); this.startDash(); return true; }
     if (kind === 'fatal') return this.g.tryFatality(this);
+    if (kind === 'unique') { this.landT = 0; this.burst = false; this.countered = false; return this.startUnique(); }
     return false;
   }
   specialUpdate() {
@@ -219,7 +231,7 @@ class Fighter {
     this.x = lerp(a.x + a.facing * 14, a.x - a.facing * 30, k);
     this.y = GROUND - Math.sin(Math.min(1, k) * Math.PI) * 34;
     if (k >= 1) {
-      const dmg = 12; this.hp = Math.max(0, this.hp - dmg); this.roundDmg += dmg; this.flash = 4;
+      const dmg = 12; this.hp = Math.max(0, this.hp - dmg); this.roundDmg += dmg; this.taken += dmg; this.flash = 4;
       this.g.shake(6); Sound.play('heavy'); FX.blood(this.x, GROUND - 10, -a.facing, 12); FX.dust(this.x, GROUND, 12);
       this.setSt('fall'); this.vy = -2.5; this.vx = -a.facing * 1.4; this.y = GROUND - 2;
       a.combo = 1; this.g.afterHit(a, this, { dmg });
@@ -245,6 +257,7 @@ class Fighter {
     let m = null;
     if (this.st === 'attack') { const mv = this.move; if (this.mt >= mv.st && this.mt < mv.st + mv.act && !this.hitDone) m = mv; }
     else if (this.st === 'dash' && !this.hitDone && this.dashActive()) m = this.dash;
+    else if (this.st === 'unique' && !this.hitDone && this.uBox) m = Object.assign({ box: this.uBox }, this.uHit);
     if (!m) return null;
     const b = m.box, y0 = this.y + b[1];
     const x0 = this.facing === 1 ? this.x + b[0] : this.x - b[0] - b[2];
@@ -252,18 +265,22 @@ class Fighter {
   }
   receive(h, dir) {
     if (this.invul > 0 && !h.fatal) return 'miss';
-    const blocking = (this.st === 'block' || this.st === 'cblock' || this.st === 'bstun') && !h.throw && !this.air && Math.sign(this.opp.x - this.x) === this.facing;
+    if (this.tryCounter && this.tryCounter(h)) return 'miss';
+    let blocking = (this.st === 'block' || this.st === 'cblock' || this.st === 'bstun') && !h.throw && !this.air && Math.sign(this.opp.x - this.x) === this.facing;
+    if (blocking && h.overhead && (this.st === 'cblock' || (this.st === 'bstun' && this.lastBlockCrouch))) blocking = false;
+    if (blocking && h.low && (this.st === 'block' || (this.st === 'bstun' && !this.lastBlockCrouch))) blocking = false;
     if (blocking) {
       this.setSt('bstun'); this.stun = h.bs || 12; this.vx = dir * Math.max(1.5, (h.kb || 2) * 0.9);
       const chip = h.chip ? Math.ceil(h.dmg * 0.15) : 0;
-      if (chip) { this.hp = Math.max(1, this.hp - chip); this.roundDmg += chip; }
+      if (chip) { this.hp = Math.max(1, this.hp - chip); this.roundDmg += chip; this.taken += chip; }
       return 'block';
     }
     let dmg = h.dmg;
     const airborne = this.air || this.st === 'fall';
     if (airborne) { this.juggle++; dmg *= Math.pow(0.72, this.juggle); }
     dmg = Math.max(1, Math.round(dmg));
-    this.hp = Math.max(0, this.hp - dmg); this.roundDmg += dmg; this.flash = 4;
+    this.hp = Math.max(0, this.hp - dmg); this.roundDmg += dmg; this.taken += dmg; this.flash = 4;
+    FX.text(this.x + rand(-6, 6), this.y - 74, '-' + dmg, dmg >= 10 ? 2 : 1, dmg >= 10 ? ['#ffffff', '#ff6a3a'] : ['#ffffff', '#ffd040'], 34, -0.9);
     this.frozen = 0; this.tint = null; this.alpha = 1; this.visFlip = false; this.jet = false;
     if (h.freeze && this.hp > 0 && !airborne) { this.frozen = h.freeze; this.tint = 'ice'; this.setSt('frozen'); this.vx = 0; Sound.play('freeze'); return 'hit'; }
     if (h.launch || airborne) { this.setSt('fall'); this.vy = h.launch ? h.launch[0] : -3.6; this.vx = dir * (h.launch ? h.launch[1] : 2); this.y = Math.min(this.y, GROUND - 1); }
@@ -300,6 +317,7 @@ class Fighter {
         snap = k >= 9 && k < 13; break;
       }
       case 'dash': p = this.dashPose(); snap = true; break;
+      case 'unique': p = this.uniquePose(); snap = this.mt < 3; break;
       case 'hit': p = mkPose(this.hitLow ? POSES.hitLow : POSES.hit); if (t < 2) snap = true; break;
       case 'fall': p = mkPose(POSES.fall, { rot: -clamp(this.t * 5, 0, 80) }); snap = true; break;
       case 'down': case 'dead': p = mkPose(POSES.lie); snap = true; break;

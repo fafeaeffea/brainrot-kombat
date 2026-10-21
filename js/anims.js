@@ -51,6 +51,10 @@ const MOVE_POSES = {
   airP: { wind: { hF: [2, -4], torso: 5, fF: [6, -10], fB: [-5, -7] }, hit: { hF: [19, 7], hB: [5, -3], torso: 22, fF: [6, -10], fB: [-6, -6], wa: 20 } },
   airK: { wind: { fF: [4, -14], fB: [-4, -10], torso: 0 }, hit: { fF: [23, -8], fB: [-3, -13], torso: -12, hF: [4, -10], hB: [-4, -8] } },
   throw: { wind: { hF: [18, -6], hB: [16, -4], torso: 20 }, hit: { hF: [-6, -22], hB: [-8, -20], torso: -30, head: -20, wa: -120 } },
+  backfist: { wind: { hF: [-6, -6], hB: [2, 0], torso: -22, head: 8 }, hit: { hF: [24, -9], eF: { x: 0, y: -1 }, hB: [-5, 2], torso: -4, head: -2, hx: 2, fF: [10, 0] } },
+  pushkick: { wind: { fF: [6, -18], torso: -8, hF: [6, -8], hB: [3, -4] }, hit: { fF: [29, -21], torso: -16, head: 8, hx: -4, hF: [2, -8], hB: [-6, -4], fB: [-8, 0] } },
+  overhead: { wind: { hF: [0, -27], hB: [-3, -25], torso: -14, head: -10, hy: 1, wa: -170 }, hit: { hF: [21, 3], hB: [19, 5], torso: 36, head: -20, hy: 6, hx: 3, fF: [11, 0], wa: 40 } },
+  divekick: { wind: { fF: [6, -14], fB: [-4, -10] }, hit: { fF: [18, 7], fB: [-6, -12], torso: -28, head: 20, hF: [4, -12], hB: [-6, -10] } },
   proj: { wind: { hF: [-5, -3], hB: [-7, -1], torso: -10, wa: -120 }, hit: { hF: [22, -6], hB: [20, -3], torso: 18, hx: 3, fF: [12, 0], wa: 0 } },
 };
 
@@ -97,7 +101,7 @@ function movePose(ch, name, k, phase) {
   let key = name;
   if (ch.weapon && (name === 'jab' || name === 'cross')) key = name + 'W';
   const mp = MOVE_POSES[key];
-  const base = name === 'sweep' || name === 'uppercut' ? mkPose(POSES.crouch) : name === 'airP' || name === 'airK' ? mkPose(POSES.jump) : stanceOf(ch);
+  const base = name === 'sweep' || name === 'uppercut' ? mkPose(POSES.crouch) : name === 'airP' || name === 'airK' || name === 'divekick' ? mkPose(POSES.jump) : stanceOf(ch);
   const wind = mkPose(base, mp.wind), hit = mkPose(base, mp.hit);
   if (phase === 0) return k < 0.6 ? blendPose(base, wind, ease(k / 0.6)) : blendPose(wind, hit, ease((k - 0.6) / 0.4));
   if (phase === 1) return hit;

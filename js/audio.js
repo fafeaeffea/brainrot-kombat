@@ -1,5 +1,5 @@
 'use strict';
-// Синтезированные звуки и чиптюн-музыка (без внешних файлов)
+// Синтезированные звуки, чиптюн-музыка и записанный диктор (snd/*.mp3, с откатом на speechSynthesis)
 const Sound = {
   ctx: null, master: null, sfx: null, mus: null, noiseBuf: null, muteReasons: new Set(), musicOn: false, track: null, step: 0, nextT: 0, timer: null,
   init() {
@@ -12,8 +12,10 @@ const Sound = {
       this.mus = this.ctx.createGain(); this.mus.gain.value = 0.32; this.mus.connect(this.master);
       const n = this.ctx.sampleRate; this.noiseBuf = this.ctx.createBuffer(1, n, n);
       const d = this.noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      this.vox = this.ctx.createGain(); this.vox.gain.value = 1; this.vox.connect(this.master);
       this.apply();
       if (this.wantTrack) this.music(this.wantTrack);
+      setTimeout(() => this.loadVoice(), 0);
     } catch (e) { this.ctx = null; }
   },
   mute(reason, on) { if (on) this.muteReasons.add(reason); else this.muteReasons.delete(reason); this.apply(); },
@@ -23,8 +25,11 @@ const Sound = {
     this.master.gain.setTargetAtTime(m ? 0 : 0.9, this.ctx.currentTime, 0.02);
     this.sfx.gain.value = Settings.sfx ? 1 : 0;
     this.mus.gain.value = Settings.music ? 0.32 : 0;
-    if (m && window.speechSynthesis) try { speechSynthesis.cancel(); } catch (e) { }
+    if (m) this.stopVoice();
   },
+  // тихий режим (меню): играют только звуки интерфейса
+  quiet: false, UI_SOUNDS: { select: 1, move: 1, back: 1 },
+  setQuiet(on) { this.quiet = !!on; },
   tone(f, dur, type = 'square', vol = 0.2, f2 = null, delay = 0, dest = null) {
     const c = this.ctx, t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(f, t);
@@ -41,6 +46,7 @@ const Sound = {
   },
   play(name) {
     if (!this.ctx || !Settings.sfx) return;
+    if (this.quiet && !this.UI_SOUNDS[name]) return;
     try {
       switch (name) {
         case 'whoosh': this.noise(0.12, 0.12, 2500, 'bandpass', 0, 600); break;
@@ -93,7 +99,8 @@ const Sound = {
     const vs = speechSynthesis.getVoices().filter(v => /^ru/i.test(v.lang));
     if (!vs.length) return null;
     const male = /pavel|dmitr|yuri|maxim|artem|ivan|boris|filipp|mikhail|male|муж|павел|дмитр|юр|максим|артём|иван/i;
-    return vs.find(v => male.test(v.name) && !/female|жен/i.test(v.name)) || vs.find(v => /google/i.test(v.name)) || vs[0];
+    const fem = /female|жен|milena|irina|anna|elena|katya|alena|ekaterina|svetlana|tatyana|daria|dariya|xenia|милена|ирина|анна|елена|алена|алёна|катя/i;
+    return vs.find(v => male.test(v.name) && !fem.test(v.name)) || vs.find(v => !fem.test(v.name)) || vs[0];
   },
   ensureVerb() {
     if (this.verb || !this.ctx) return this.verb;
@@ -112,6 +119,7 @@ const Sound = {
   },
   sting(kind) {
     if (!this.ctx || !Settings.sfx) return;
+    if (this.quiet && kind !== 'swell') return;
     try {
       const verb = this.ensureVerb();
       if (kind === 'name') {
@@ -133,17 +141,93 @@ const Sound = {
       }
     } catch (e) { }
   },
+  // ----- записанный диктор: фразы -> клипы snd/<key>.mp3 -----
+  VOICE_DIR: 'snd/',
+  VOICE_MAP: {
+    'кайро': 'n_kairo', 'юки': 'n_yuki', 'сержант вольт': 'n_volt', 'вольт': 'n_volt',
+    'ронин 9': 'n_ronin', 'ронин девять': 'n_ronin', 'бьорн': 'n_bjorn', 'морена': 'n_morena',
+    'тралалеро тралала': 'n_tralalero', 'бомбардиро крокодило': 'n_bombardiro',
+    'тун тун сахур': 'n_tung', 'балерина капучина': 'n_ballerina',
+    'раунд один': 'r1', 'раунд 1': 'r1', 'раунд два': 'r2', 'раунд 2': 'r2', 'раунд три': 'r3', 'раунд 3': 'r3',
+    'раунд четыре': 'r4', 'раунд 4': 'r4', 'раунд пять': 'r5', 'раунд 5': 'r5',
+    'бой': 'fight', 'фаталити': 'fatality', 'добей его': 'finish_him', 'добей ее': 'finish_her',
+    'против': 'vs', 'побеждает': 'wins', 'безупречная победа': 'flawless', 'ничья': 'draw',
+    'время вышло': 'timeup', 'безупречно ты чемпион': 'champion',
+    'выбери режим': 'pick_mode', 'выбери бойца': 'pick_fighter'
+  },
+  clips: {}, voiceLoading: false, voiceSrc: [], voiceTok: 0, _lastClips: null, _lastSay: null,
+  loadVoice() {
+    if (this.voiceLoading || !this.ctx || !window.fetch) return;
+    this.voiceLoading = true;
+    const keys = [...new Set(Object.values(this.VOICE_MAP))];
+    // по очереди (по 3 одновременно), чтобы не мешать загрузке игры
+    let i = 0;
+    const next = () => {
+      if (i >= keys.length) return;
+      const k = keys[i++];
+      fetch(this.VOICE_DIR + k + '.mp3').then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then(ab => new Promise((res, rej) => { const p = this.ctx.decodeAudioData(ab, res, rej); if (p && p.catch) p.catch(rej); }))
+        .then(buf => { this.clips[k] = buf; }).catch(() => { this.clips[k] = null; }).then(next);
+    };
+    for (let j = 0; j < 3; j++) next();
+  },
+  normPhrase(text) {
+    return String(text).toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();
+  },
+  // разбивает фразу на известные клипы (жадно, самые длинные куски); null — если что-то не распознано
+  phraseClips(text) {
+    const w = this.normPhrase(text).split(' ').filter(Boolean), out = [];
+    if (!w.length) return null;
+    for (let i = 0; i < w.length;) {
+      let hit = 0;
+      for (let n = Math.min(4, w.length - i); n > 0; n--) { const k = this.VOICE_MAP[w.slice(i, i + n).join(' ')]; if (k) { out.push(k); hit = n; break; } }
+      if (!hit) return null;
+      i += hit;
+    }
+    return out;
+  },
+  duck(on) {
+    if (!this.mus || !this.ctx) return;
+    this.mus.gain.setTargetAtTime(Settings.music ? (on ? 0.1 : 0.32) : 0, this.ctx.currentTime, on ? 0.05 : 0.3);
+  },
+  stopVoice() {
+    this.voiceTok++;
+    for (const s of this.voiceSrc) try { s.stop(); } catch (e) { }
+    this.voiceSrc = [];
+    if (window.speechSynthesis) try { speechSynthesis.cancel(); } catch (e) { }
+  },
+  playClips(keys, delay) {
+    const c = this.ctx, verb = this.ensureVerb(), tok = this.voiceTok;
+    const g = c.createGain(); g.gain.value = 1.15; g.connect(this.vox);
+    if (verb) { const s = c.createGain(); s.gain.value = 0.3; g.connect(s); s.connect(verb); }
+    let t = c.currentTime + delay;
+    const t0 = t;
+    for (const k of keys) {
+      const b = this.clips[k], src = c.createBufferSource();
+      src.buffer = b; src.connect(g); src.start(t); this.voiceSrc.push(src);
+      t += Math.max(0.3, b.duration - 0.22); // в клипе хвост эха ~0.35с: следующий начинается с паузой ~0.13с
+    }
+    const end = t + 0.15;
+    setTimeout(() => { if (tok === this.voiceTok) this.duck(true); }, Math.max(0, (t0 - c.currentTime) * 1000));
+    setTimeout(() => { if (tok === this.voiceTok) { this.duck(false); this.voiceSrc = []; } }, (end - c.currentTime) * 1000);
+  },
   say(text, sting) {
     if (sting) this.sting(sting === true ? 'name' : sting);
-    if (!Settings.voice || this.muteReasons.size || !window.speechSynthesis) return;
+    if (!Settings.voice || this.muteReasons.size) return;
+    this.stopVoice();
+    const keys = this.phraseClips(text);
+    const ready = !!(keys && this.ctx && keys.every(k => this.clips[k]));
+    this._lastClips = ready ? keys : null;
+    this._lastSay = { text, keys, ready };
+    if (ready) { try { if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => { }); this.playClips(keys, sting ? 0.12 : 0.02); return; } catch (e) { } }
+    if (!window.speechSynthesis) return;
     try {
-      speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ru-RU'; u.rate = 0.72; u.pitch = 0.05; u.volume = 1;
+      u.lang = 'ru-RU'; u.rate = 0.75; u.pitch = 0; u.volume = 1;
       const v = this.pickVoice(); if (v) u.voice = v;
       // музыка приглушается, пока говорит диктор
-      u.onstart = () => { if (this.mus && this.ctx) this.mus.gain.setTargetAtTime(Settings.music ? 0.1 : 0, this.ctx.currentTime, 0.05); };
-      u.onend = u.onerror = () => { if (this.mus && this.ctx) this.mus.gain.setTargetAtTime(Settings.music ? 0.32 : 0, this.ctx.currentTime, 0.3); };
+      u.onstart = () => this.duck(true);
+      u.onend = u.onerror = () => this.duck(false);
       setTimeout(() => { try { speechSynthesis.speak(u); } catch (e) { } }, sting ? 120 : 0);
     } catch (e) { }
   },

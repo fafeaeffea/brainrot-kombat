@@ -1,13 +1,13 @@
 'use strict';
-const FAT_PRE = 72;
+const FAT_PRE = 72, OUT_K = 2;
 // Игровой цикл, раунды, камера, HUD, победа
 const Game = {
   f: [null, null], ai: [null, null], inp: [null, null], projs: [], ghosts: [],
   state: 'demo', phase: 'none', pt: 0, frame: 0, camX: (STAGE_W - W) / 2, zoom: 1, zx: W / 2, zy: H / 2,
   shakeAmp: 0, flashA: 0, dim: 0, dimT: 0, hitstop: 0, slow: 0, wins: [0, 0], round: 1, timer: 99, tsub: 0,
-  ann: null, cine: 0, punch: 0, impactT: 0, impactCd: 0, redA: 0, splats: [], banner: null, combos: [null, null], stageState: {}, paused: false, adPause: false, cfg: null, fat: null, finisher: null, loser: null, winner: null, result: null,
+  ann: null, cabK: 1, zones: [], cine: 0, punch: 0, impactT: 0, impactCd: 0, redA: 0, splats: [], banner: null, combos: [null, null], stageState: {}, paused: false, adPause: false, cfg: null, fat: null, finisher: null, loser: null, winner: null, result: null,
   init() {
-    this.cv = document.getElementById('game'); this.ctx = this.cv.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
+    this.cv = document.getElementById('game'); this.cv.width = W * OUT_K; this.cv.height = H * OUT_K; this.ctx = this.cv.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
     [this.scene, this.sctx] = mkCanvas(W, H);
     this.inp[0] = new PlayerInput([KEYMAP1], 0, true);
     this.inp[1] = new PlayerInput([KEYMAP2], 1, false);
@@ -23,13 +23,14 @@ const Game = {
     this.inp[0].maps = cfg.mode === '2p' ? [KEYMAP1] : [KEYMAP1, KEYMAP2];
     this.inp[0].pad = 0; this.inp[1].pad = 1;
     this.wins = [0, 0]; this.round = 1; this.result = null; this.paused = false;
+    Sound.setQuiet(cfg.mode === 'demo');
     if (cfg.mode === 'demo') { this.state = 'match'; this.startRound(); }
     else { this.state = 'vs'; this.vsT = 0; Sound.play('gong'); Sound.music('fight'); Sound.say(cfg.p1.name + '! против! ' + cfg.p2.name + '!', 'big'); }
   },
   startRound() {
     this.state = 'match';
     this.f[0].reset(STAGE_W / 2 - 62, 1); this.f[1].reset(STAGE_W / 2 + 62, -1);
-    this.camX = (STAGE_W - W) / 2; this.zoom = 1; this.projs = []; this.ghosts = []; FX.clear(); this.stageState = {}; this.splats = []; this.cine = 0; this.banner = null; this.impactT = 0;
+    this.camX = (STAGE_W - W) / 2; this.zoom = 1; this.projs = []; this.ghosts = []; FX.clear(); this.stageState = {}; this.zones = []; this.splats = []; this.cine = 0; this.banner = null; this.impactT = 0;
     this.timer = Settings.time || 0; this.tsub = 0; this.phase = 'intro'; this.pt = 0; this.ann = null; this.fat = null; this.dim = 0; this.dimT = 0;
     this.finisher = this.loser = this.winner = null; this.combos = [null, null]; this.inp.forEach(i => i.clear());
     if (this.cfg.mode !== 'demo') Sound.music('fight');
@@ -86,6 +87,7 @@ const Game = {
     if (c.p || c.k) {
       const fa = f.ch.fatal;
       if (ph === 'finish' && this.finisher === f && seqMatch(c.seq, fa.seq) && (fa.btn === 'p' ? c.p : c.k)) c.special = 'fatal';
+      else if (c.p && seqMatch(c.seq, ['D', 'B'])) c.special = 'unique';
       else if (c.p && seqMatch(c.seq, ['B', 'F'])) c.special = 'proj';
       else if (c.k && seqMatch(c.seq, ['D', 'F'])) c.special = 'dash';
       if (c.special) { c.p = c.k = 0; this.inp[i].clear(); }
@@ -121,6 +123,7 @@ const Game = {
     for (const f of this.f) { f.x = clamp(f.x, 14, STAGE_W - 14); if (f.dhp > f.hp) f.dhp = Math.max(f.hp, f.dhp - 0.5); else f.dhp = f.hp; }
     if (this.phase !== 'fatality' && this.phase !== 'victory') { this.melee(a, b); this.melee(b, a); }
     for (const p of this.projs) p.update(this);
+    this.zoneStep();
     this.projCollisions();
     this.projs = this.projs.filter(p => !p.dead);
     for (const gh of this.ghosts) gh.life--; this.ghosts = this.ghosts.filter(g => g.life > 0);
@@ -131,9 +134,9 @@ const Game = {
   camera() {
     const [a, b] = this.f;
     if (this.phase === 'victory' && this.winner) {
-      const w = this.winner, k = clamp(this.pt / 70, 0, 1);
-      this.zoom = lerp(1, 1.55, ease(k));
-      this.zx = lerp(W / 2, w.x - this.camX, ease(k)); this.zy = lerp(H / 2, w.y - 42, ease(k));
+      const w = this.winner;
+      this.zoom = lerp(this.zoom, 2.1, 0.05);
+      this.zx = lerp(this.zx, w.x - this.camX, 0.08); this.zy = lerp(this.zy, w.y - 44, 0.08);
       return;
     }
     if (this.phase === 'fatality' && this.fat) {
@@ -143,12 +146,20 @@ const Game = {
       this.zx = mid - this.camX; this.zy = GROUND - 56;
       return;
     }
-    this.zoom = lerp(this.zoom, 1, 0.1);
+    // камера приближается к бойцам: чем ближе они друг к другу, тем крупнее
     const vis = [a, b].filter(f => !f.hidden && f.y > -40);
     const mid = vis.length ? vis.reduce((s, f) => s + f.x, 0) / vis.length : this.camX + W / 2;
+    let zt = 1.2;
+    if (vis.length) {
+      const xs = vis.map(f => f.x), spread = Math.max(...xs) - Math.min(...xs), top = Math.min(...vis.map(f => f.y + (f.offY || 0))) - 98;
+      zt = clamp(Math.min(W / (spread + 150), H / (GROUND + 22 - top)), 1.2, 1.75);
+    }
+    this.zoom = lerp(this.zoom, zt, 0.07);
     const tgt = clamp(mid - W / 2, 0, STAGE_W - W);
     this.camX = lerp(this.camX, tgt, 0.15);
-    if (vis.length === 2 && this.phase !== 'fatality') for (const f of this.f) f.x = clamp(f.x, this.camX + 12, this.camX + W - 12);
+    const vw = W / this.zoom, vh = H / this.zoom;
+    this.zx = clamp(mid - this.camX, vw / 2, W - vw / 2); this.zy = clamp(GROUND + 22 - vh / 2, vh / 2, H - vh / 2);
+    if (vis.length === 2 && this.phase !== 'fatality') { const lo = this.camX + this.zx - vw / 2 + 12, hi = this.camX + this.zx + vw / 2 - 12; for (const f of this.f) f.x = clamp(f.x, lo, hi); }
   },
   separate() {
     const [a, b] = this.f;
@@ -158,6 +169,29 @@ const Game = {
     if (Math.abs(a.y - b.y) > 44) return;
     const dx = b.x - a.x, minD = 21;
     if (Math.abs(dx) < minD) { const s = dx === 0 ? (a.facing === 1 ? 1 : -1) : Math.sign(dx), push = (minD - Math.abs(dx)) / 2; a.x -= s * push; b.x += s * push; }
+  },
+  zoneStep() {
+    for (const z of this.zones) {
+      z.t++;
+      if (z.vx) z.x += z.vx;
+      if (z.ring) z.w = 10 + z.t * 9;
+      if (z.boom && z.t === z.on) { FX.explosion(z.x, GROUND - 8, 0.9); Sound.play('explode'); this.shake(4); }
+      if (z.sfx && z.t === z.on && !z.boom) Sound.play(z.sfx);
+      if (!z.hit || z.done || z.t < z.on || z.t >= z.off) continue;
+      const v = this.other(z.owner), hb = v.hurtBox(); if (!hb) continue;
+      if (z.ground && v.air) continue;
+      const zx = z.x - z.w / 2, [x2, y2, w2, h2] = hb;
+      if (zx > x2 + w2 || x2 > zx + z.w || z.y > y2 + h2 || y2 > z.y + z.h) continue;
+      z.done = true;
+      const dir = Math.sign(v.x - z.x) || z.owner.facing, res = v.receive(z.hit, dir);
+      if (res === 'miss') continue;
+      const hx = v.x, hy = v.y - 34;
+      if (res === 'block') { Sound.play('block'); FX.spark(hx, hy, 6, '#cfe6ff'); this.hitstop = 4; continue; }
+      const a = z.owner; a.combo++; this.combos[a.idx] = { n: a.combo, t: 0 };
+      Sound.play(z.hit.snd || 'heavy'); FX.blood(hx, hy, dir, 12, 1.3); FX.spark(hx, hy, 6); FX.hitFlash(hx, hy, true); this.hitstop = 7; this.shake(4);
+      this.afterHit(a, v, z.hit);
+    }
+    this.zones = this.zones.filter(z => z.t < z.life);
   },
   melee(a, b) {
     const ab = a.attackBox(); if (!ab) return;
@@ -170,13 +204,13 @@ const Game = {
       if (!b.canBeThrown()) return;
       a.setSt('throwing'); b.setSt('thrown'); b.thrower = a; Sound.play('grab'); return;
     }
-    const isSpecial = a.st === 'dash';
+    const isSpecial = a.st === 'dash' || a.st === 'unique';
     const h = Object.assign({}, m, { chip: isSpecial });
     const res = b.receive(h, a.facing);
     if (res === 'miss') return;
     const hx = (Math.max(x1, x2) + Math.min(x1 + w1, x2 + w2)) / 2, hy = (Math.max(y1, y2) + Math.min(y1 + h1, y2 + h2)) / 2;
     if (res === 'block') { Sound.play('block'); FX.spark(hx, hy, 6, '#cfe6ff'); FX.hitFlash(hx, hy, false); this.hitstop = 4; if (b.lastBlockCrouch !== undefined) { } return; }
-    if (a.st === 'dash' && a.dash.multi) a.hits = (a.hits || 0) + 1;
+    if ((a.st === 'dash' && a.dash.multi) || a.st === 'unique') a.hits = (a.hits || 0) + 1;
     a.combo++; this.combos[a.idx] = { n: a.combo, t: 0 };
     Sound.play(m.heavy || m.kd || m.launch ? 'heavy' : (m.snd || 'hit'));
     FX.blood(hx, hy, a.facing, m.heavy || m.kd ? 14 : 7, m.heavy ? 1.4 : 1); FX.spark(hx, hy, 6); FX.hitFlash(hx, hy, m.heavy);
@@ -243,7 +277,7 @@ const Game = {
     a.x = clamp(v.x - dir * 44, 20, STAGE_W - 20); a.facing = dir; v.facing = -dir;
     a.setSt('script'); v.setSt('script');
     a.forcePose = null; v.forcePose = f => ANIM.dizzy(f.ch, f.anim);
-    this.projs = [];
+    this.projs = []; this.zones = [];
     this.fat = { sc, t: 0, a, v, s: {}, pre: 0 };
     this.phase = 'fatality'; this.pt = 0; this.dimT = 0.62; this.ann = null;
     Sound.stopMusic(); Sound.play('fatal'); Sound.sting('big'); this.redA = 0.5;
@@ -346,9 +380,17 @@ const Game = {
   startDemo() { Sound.music('menu'); this.demoNext(); },
   // ---------- отрисовка ----------
   render() {
+    this.render0();
+    const tgt = typeof UI !== 'undefined' && UI.cur === 'menu' && !UI.zooming ? 1 : 0;
+    this.cabK += (tgt - this.cabK) * 0.14; if (Math.abs(tgt - this.cabK) < 0.002) this.cabK = tgt;
+    if (this.cabK > 0.002) Cabinet.compose(this);
+  },
+  render0() {
     const c = this.sctx, ctx = this.ctx;
-    if (this.state === 'vs') { this.drawVS(c); ctx.drawImage(this.scene, 0, 0); return; }
-    if (!this.f[0]) { c.fillStyle = '#000'; c.fillRect(0, 0, W, H); ctx.drawImage(this.scene, 0, 0); return; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
+    const OW = W * OUT_K, OH = H * OUT_K;
+    if (this.state === 'vs') { this.drawVS(c); ctx.drawImage(this.scene, 0, 0, OW, OH); return; }
+    if (!this.f[0]) { c.fillStyle = '#000'; c.fillRect(0, 0, W, H); ctx.drawImage(this.scene, 0, 0, OW, OH); return; }
     const cx = Math.round(this.camX), sx = this.shakeAmp ? Math.round(rand(-1, 1) * this.shakeAmp) : 0, sy = this.shakeAmp ? Math.round(rand(-1, 1) * this.shakeAmp) : 0;
     c.save(); c.translate(sx, sy);
     Stage.drawBg(c, cx, this.frame, this);
@@ -364,6 +406,7 @@ const Game = {
     const order = this.f.slice().sort((p, q) => (p.st === 'attack' || p.st === 'dash' || p.st === 'script' && this.fat && this.fat.a === p ? 1 : 0) - (q.st === 'attack' || q.st === 'dash' || q.st === 'script' && this.fat && this.fat.a === q ? 1 : 0));
     for (const f of order) f.draw(c, cx);
     for (const p of this.projs) p.draw(c, cx);
+    for (const z of this.zones) if (z.draw) z.draw(c, cx, z);
     FX.draw(c, cx);
     if (this.fat && this.fat.sc.front) this.fat.sc.front(c, cx, this, this.fat.a, this.fat.v, this.fat.t, this.fat.s);
     c.restore();
@@ -371,8 +414,9 @@ const Game = {
     // камера с приближением
     if (this.zoom > 1.01) {
       const z = this.zoom, vw = W / z, vh = H / z, x0 = clamp(this.zx - vw / 2, 0, W - vw), y0 = clamp(this.zy - vh / 2, 0, H - vh);
-      ctx.drawImage(this.scene, x0, y0, vw, vh, 0, 0, W, H);
-    } else ctx.drawImage(this.scene, 0, 0);
+      ctx.drawImage(this.scene, x0, y0, vw, vh, 0, 0, OW, OH);
+    } else ctx.drawImage(this.scene, 0, 0, OW, OH);
+    ctx.setTransform(OUT_K, 0, 0, OUT_K, 0, 0);
     if (this.impactT > 0) this.drawImpact(ctx);
     if (this.redA > 0) { ctx.globalAlpha = this.redA; ctx.fillStyle = '#c00010'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
     if (this.cine > 0.02) this.drawCine(ctx);
@@ -381,7 +425,7 @@ const Game = {
     if (!this.demo) this.drawHUD(ctx); else this.drawDemoHUD(ctx);
   },
   drawImpact(ctx) {
-    const img = ctx.getImageData(0, 0, W, H), d = img.data, inv = this.impactT <= 3;
+    const img = ctx.getImageData(0, 0, this.cv.width, this.cv.height), d = img.data, inv = this.impactT <= 3;
     for (let i = 0; i < d.length; i += 4) {
       const l = (d[i] * 3 + d[i + 1] * 4 + d[i + 2]) >> 3;
       let r, g, b;
@@ -441,6 +485,9 @@ const Game = {
     const [a, b] = this.f;
     if (this.phase === 'victory') { this.drawAnn(ctx); this.drawVictoryText(ctx); return; }
     this.bar(ctx, 12, 10, 196, a, false); this.bar(ctx, W - 12 - 196, 10, 196, b, true);
+    // нанесённый урон за матч
+    drawText(ctx, 'УРОН ' + b.taken, 12 + 196 - 3, 30, 1, ['#ffe0b0', '#ff8a3a'], 'right');
+    drawText(ctx, 'УРОН ' + a.taken, W - 12 - 196 + 3, 30, 1, ['#ffe0b0', '#ff8a3a'], 'left');
     // таймер
     ctx.fillStyle = '#140a14'; ctx.fillRect(W / 2 - 17, 6, 34, 22); ctx.fillStyle = '#5a3a2a'; ctx.fillRect(W / 2 - 16, 7, 32, 20); ctx.fillStyle = '#241418'; ctx.fillRect(W / 2 - 15, 8, 30, 18);
     const tv = this.phase === 'finish' ? Math.ceil(this.finishT / 60) : (Settings.time ? this.timer : '--');

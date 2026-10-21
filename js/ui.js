@@ -62,7 +62,15 @@ const UI = {
     b.onpointerenter = () => { const i = this.items.indexOf(b); if (i >= 0 && i !== this.focus) { this.setFocus(i); } };
     return b;
   },
+  // наезд камеры в экран автомата
+  enterArcade(cb) {
+    if (this.zooming) return;
+    this.zooming = true; this.S.menu.el.classList.add('fade'); Sound.sting('swell');
+    setTimeout(() => { this.zooming = false; this.S.menu.el.classList.remove('fade'); cb(); }, 430);
+  },
   handle(q, raw) {
+    if (this.zooming) return;
+    if (this.cur === 'menu') for (const m of q) Cabinet.nudge(m);
     const sc = this.S[this.cur];
     if (sc.handle && sc.handle(q, raw)) return;
     for (const m of q) {
@@ -76,16 +84,16 @@ const UI = {
   tick() { const sc = this.cur && this.S[this.cur]; if (sc && sc.tick) sc.tick(); },
   // ---------- главное меню ----------
   buildMenu() {
-    const S = this.S.menu, e = S.el;
+    const S = this.S.menu, e = el('div', 'cabscreen', S.el);
     const logo = el('div', 'logo', e);
     logo.appendChild(pxCanvas('БРЕЙНРОТ', 4, ['#fff3a0', '#ff8a1a', '#c01010']));
     logo.appendChild(pxCanvas('КОМБАТ', 5, ['#ffffff', '#ffd040', '#a04010']));
     logo.appendChild(pxCanvas('ПИКСЕЛЬНЫЙ ФАЙТИНГ С ФАТАЛИТИ', 1, '#ffd0c0'));
     const col = el('div', 'menu-col', e);
-    this.btn(col, 'ИГРАТЬ', () => this.showModes(null));
-    this.btn(col, 'СПИСОК УДАРОВ', () => this.show('moves'));
-    this.btn(col, 'УПРАВЛЕНИЕ', () => this.show('controls'));
-    this.btn(col, 'НАСТРОЙКИ', () => this.show('settings'));
+    this.btn(col, 'ИГРАТЬ', () => this.enterArcade(() => this.showModes(null)));
+    this.btn(col, 'СПИСОК УДАРОВ', () => this.enterArcade(() => this.show('moves')));
+    this.btn(col, 'УПРАВЛЕНИЕ', () => this.enterArcade(() => this.show('controls')));
+    this.btn(col, 'НАСТРОЙКИ', () => this.enterArcade(() => this.show('settings')));
     S.stats = el('div', 'stats', e);
     S.onShow = () => { S.stats.innerHTML = ''; S.stats.appendChild(pxCanvas('ПОБЕД: ' + Store.get('wins', 0) + '    ФАТАЛИТИ: ' + Store.get('fatalities', 0), 1, '#c0a0a0')); };
   },
@@ -110,7 +118,7 @@ const UI = {
   },
   // r — результат матча (или null, если открыто из меню)
   showModes(r) {
-    const S = this.S.modes; S.res = r;
+    const S = this.S.modes; S.res = r; Sound.setQuiet(true); Sound.say('Выбери режим');
     S.head.innerHTML = ''; S.btns.innerHTML = '';
     if (r) {
       S.head.appendChild(pxCanvas(r.title, 3, r.col, 0, 'center'));
@@ -187,7 +195,7 @@ const UI = {
     S.prev = [];
     S.side.forEach((sd, i) => {
       const tag = el('div', 'ptag', sd); S['tag' + i] = tag;
-      const [cv] = mkCanvas(80, 96); cv.className = 'px prev'; sd.appendChild(cv); S.prev.push(cv);
+      const [cv] = mkCanvas(100, 100); cv.className = 'px prev'; sd.appendChild(cv); S.prev.push(cv);
       S['info' + i] = el('div', 'info', sd);
     });
     const grid = el('div', 'grid', e); S.cells = [];
@@ -217,6 +225,7 @@ const UI = {
     const K1 = KEYS[0], K2 = KEYS[1], dirs = K => keyName(K.u) + keyName(K.l) + keyName(K.d) + keyName(K.r);
     S.hint.appendChild(pxCanvas(mode === '2p' ? 'ИГРОК 1: ' + dirs(K1) + ' + ' + keyName(K1.p) + '. ИГРОК 2: ' + dirs(K2) + ' + ' + keyName(K2.p) + '.' : 'СТРЕЛКИ ИЛИ ' + dirs(K1) + ' - ВЫБОР. ENTER ИЛИ ' + keyName(K1.p) + ' - ПОДТВЕРДИТЬ.', 1, '#c0b0b0', 200, 'center'));
     S.side[1].style.visibility = mode === 'tower' ? 'hidden' : 'visible';
+    Sound.say('Выбери бойца');
     this.show('select');
     this.selRefresh();
   },
@@ -291,14 +300,34 @@ const UI = {
     const S = this.S.select; S.t++;
     for (let p = 0; p < 2; p++) {
       const i = S.lock[p] && S.rnd[p] != null ? S.rnd[p] : S.cur[p];
-      const cv = S.prev[p], c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height);
+      const cv = S.prev[p], c = cv.getContext('2d');
       let ch = CHARS[i];
       if (!ch) ch = CHARS[Math.floor(S.t / 8) % CHARS.length];
-      const pose = S.lock[p] ? ANIM.victory(ch, S.t) : ANIM.idle(ch, S.t);
-      renderFighter(S.R, ch, pose, { anim: S.t, tint: CHARS[i] ? null : 'shadow', tintK: 0.85 });
-      c.save(); if (p === 1) { c.translate(80, 0); c.scale(-1, 1); }
-      c.drawImage(S.R.cv, SPR_OX - 40, SPR_OY - 92, 80, 96, 0, 0, 80, 96); c.restore();
+      this.drawAvatar(c, ch, S, p, !CHARS[i]);
     }
+  },
+  // квадратная аватарка: фон в цветах бойца, лучи, рамка
+  drawAvatar(c, ch, S, p, rnd) {
+    const t = S.t, N = 100, col = rnd ? '#8a8a9a' : ch.pal.fx || '#ffb030', lock = S.lock[p];
+    c.imageSmoothingEnabled = false;
+    ditherV(c, 0, 0, N, N, ['#08040c', mix('#08040c', col, 0.25), mix('#140810', col, 0.55)]);
+    c.save(); c.globalAlpha = lock ? 0.35 : 0.16; c.fillStyle = mix(col, '#ffffff', 0.4);
+    for (let k = 0; k < 10; k++) { const a = t * 0.01 + k * 0.628; c.beginPath(); c.moveTo(50, 62); c.lineTo(50 + Math.cos(a) * 120, 62 + Math.sin(a) * 120); c.lineTo(50 + Math.cos(a + 0.22) * 120, 62 + Math.sin(a + 0.22) * 120); c.fill(); }
+    c.restore();
+    c.globalAlpha = 0.5; pdisk(c, 50, 58, 30 + Math.sin(t * 0.08) * 2, mix(col, '#000000', 0.35)); c.globalAlpha = 0.35; pdisk(c, 50, 58, 22, mix(col, '#ffffff', 0.2)); c.globalAlpha = 1;
+    c.globalAlpha = 0.45; c.fillStyle = '#000'; c.fillRect(32, 93, 36, 3); c.fillRect(36, 92, 28, 5); c.globalAlpha = 1;
+    const pose = lock ? ANIM.victory(ch, t) : ANIM.idle(ch, t);
+    renderFighter(S.R, ch, pose, { anim: t, tint: rnd ? 'shadow' : null, tintK: 0.85 });
+    c.save(); if (p === 1) { c.translate(N, 0); c.scale(-1, 1); }
+    c.drawImage(S.R.cv, SPR_OX - 50, SPR_OY - 92, N, 96, 0, 0, N, 96); c.restore();
+    if (rnd) drawText(c, '?', 50, 46, 5, ['#ffffff', '#ffd040']);
+    // рамка с заклёпками
+    c.fillStyle = '#000'; c.fillRect(0, 0, N, 3); c.fillRect(0, N - 3, N, 3); c.fillRect(0, 0, 3, N); c.fillRect(N - 3, 0, 3, N);
+    const gold = lock ? '#ffe070' : '#c08a30';
+    c.fillStyle = gold; c.fillRect(1, 1, N - 2, 1); c.fillRect(1, N - 2, N - 2, 1); c.fillRect(1, 1, 1, N - 2); c.fillRect(N - 2, 1, 1, N - 2);
+    c.fillStyle = p ? '#3aa8ff' : '#ff6a3a'; c.fillRect(3, 3, N - 6, 1); c.fillRect(3, N - 4, N - 6, 1);
+    for (const [x, y] of [[4, 4], [N - 6, 4], [4, N - 6], [N - 6, N - 6]]) { c.fillStyle = gold; c.fillRect(x, y, 2, 2); c.fillStyle = '#fff6c0'; c.fillRect(x, y, 1, 1); }
+    c.globalAlpha = 0.08; c.fillStyle = '#fff'; for (let y = 4; y < N - 4; y += 2) c.fillRect(4, y, N - 8, 1); c.globalAlpha = 1;
   },
   // ---------- башня ----------
   startTower(ch) {
@@ -429,6 +458,7 @@ const UI = {
     sec('ОСОБЫЕ ПРИЁМЫ');
     row(PROJ[ch.proj].name, '← → + РУКА  (' + keyName(KEYS[0].sp1) + ')');
     row(DASH[ch.dash].name, '↓ → + НОГА  (' + keyName(KEYS[0].sp2) + ')');
+    row(uniqueOf(ch).name + ' (КОРОННЫЙ)', '↓ ← + РУКА  (' + keyName(KEYS[0].sp3) + ')', '#ffd040');
     sec('ФАТАЛИТИ (ВО ВРЕМЯ «ДОБЕЙ!», ВБЛИЗИ)');
     row(ch.fatal.name, arr(ch.fatal.seq) + ' + ' + (ch.fatal.btn === 'p' ? 'РУКА' : 'НОГА') + '  (' + keyName(KEYS[0].fat) + ')', '#ff8a7a');
     sec('БАЗОВЫЕ УДАРЫ');
@@ -437,6 +467,10 @@ const UI = {
     row('Апперкот', '↓ + РУКА');
     row('Подсечка', '↓ + НОГА');
     row('Круговой удар', '← + НОГА');
+    row('Разворотный кулак', '← + РУКА');
+    row('Удар сверху (пробивает присед)', '→ + РУКА');
+    row('Толчок ногой', '→ + НОГА');
+    row('Удар в пике', 'В ПРЫЖКЕ ↓ + НОГА');
     row('Бросок (вплотную)', '→ + РУКА');
     row('Удары в прыжке', '↑ ЗАТЕМ РУКА / НОГА');
     row('Блок', 'БЛОК ИЛИ ДЕРЖАТЬ ←');
@@ -449,8 +483,8 @@ const UI = {
     const S = this.S.controls, e = S.el;
     el('div', 'sel-title', e).appendChild(pxCanvas('УПРАВЛЕНИЕ', 3, ['#fff6c0', '#ffb030']));
     const tb = el('div', 'ctable', e);
-    const names = { l: 'ВЛЕВО', r: 'ВПРАВО', u: 'ПРЫЖОК', d: 'ПРИСЕД', p: 'РУКА', k: 'НОГА', b: 'БЛОК', sp1: 'СНАРЯД', sp2: 'РЫВОК', fat: 'ФАТАЛИТИ' };
-    const pad = { l: 'КРЕСТ ←', r: 'КРЕСТ →', u: 'КРЕСТ ↑', d: 'КРЕСТ ↓', p: 'X / Y', k: 'A', b: 'B / RT', sp1: 'LB', sp2: 'RB', fat: '—' };
+    const names = { l: 'ВЛЕВО', r: 'ВПРАВО', u: 'ПРЫЖОК', d: 'ПРИСЕД', p: 'РУКА', k: 'НОГА', b: 'БЛОК', sp1: 'СНАРЯД', sp2: 'РЫВОК', sp3: 'КОРОННЫЙ', fat: 'ФАТАЛИТИ' };
+    const pad = { l: 'КРЕСТ ←', r: 'КРЕСТ →', u: 'КРЕСТ ↑', d: 'КРЕСТ ↓', p: 'X', k: 'A', b: 'B / RT', sp1: 'LB', sp2: 'RB', sp3: 'Y', fat: '—' };
     const head = el('div', 'crow chead', tb);
     for (const h of ['ДЕЙСТВИЕ', 'ИГРОК 1', 'ИГРОК 2', 'ГЕЙМПАД']) el('div', 'ccell', head).appendChild(pxCanvas(h, 1, '#8ad0ff'));
     S.cells = [];
@@ -544,7 +578,7 @@ const UI = {
       b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
       return b;
     };
-    mk('tp', 'Р', 'p'); mk('tk', 'Н', 'k'); mk('tbk', 'Б', 'b'); mk('ts1', 'СНАРЯД', 'sp1'); mk('ts2', 'РЫВОК', 'sp2');
+    mk('tp', 'Р', 'p'); mk('tk', 'Н', 'k'); mk('tbk', 'Б', 'b'); mk('ts1', 'СНАРЯД', 'sp1'); mk('ts2', 'РЫВОК', 'sp2'); mk('ts3', 'КОРОНА', 'sp3');
     this.fatBtn = mk('tfat', 'ФАТАЛИТИ', 'fat');
     const ps = el('div', 'tpause', T); ps.appendChild(pxCanvas('II', 2, '#ffffff')); ps.addEventListener('pointerdown', e => { e.preventDefault(); if (Game.phase === 'victory') Game.endMatch(); else Game.pause(true); });
   },

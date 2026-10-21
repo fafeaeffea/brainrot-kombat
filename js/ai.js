@@ -43,10 +43,12 @@ class AI {
     if (dist > 150) {
       if (r < 0.3 && !g.projOf(f)) c.special = 'proj';
       else if (r < 0.42) c.special = 'dash';
+      else if (r < 0.5 && this.lv > 1) c.special = 'unique';
       else this.push(20 + randi(0, 20), { [fw]: 1 });
     } else if (dist > 52) {
       if (r < 0.18 && !g.projOf(f)) c.special = 'proj';
       else if (r < 0.3) c.special = 'dash';
+      else if (r < 0.37) c.special = 'unique';
       else if (r < 0.45) { this.push(2, { u: 1, [fw]: 1 }); this.push(16, {}); this.push(1, { k: 1 }); }
       else if (r < 0.52) this.push(16, { [bk]: 1 });
       else this.push(12 + randi(0, 12), { [fw]: 1 });
@@ -56,7 +58,9 @@ class AI {
       else if (r < this.aggr * 0.72) { c.d = 1; c.k = 1; }
       else if (r < this.aggr * 0.82) { c.d = 1; c.p = 1; }
       else if (r < this.aggr * 0.9 && dist < 32) { c[fw] = 1; c.p = 1; }
-      else if (r < 0.85) { c[bk] = 1; c.k = 1; }
+      else if (r < 0.8) { c[bk] = 1; c.k = 1; }
+      else if (r < 0.84) { c[bk] = 1; c.p = 1; }
+      else if (r < 0.87) { c[fw] = 1; (Math.random() < 0.5 ? c.p = 1 : c.k = 1); }
       else this.push(12, { [bk]: 1 });
     }
     this.cool = this.react + randi(0, 12);
