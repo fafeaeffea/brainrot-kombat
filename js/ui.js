@@ -119,12 +119,24 @@ const UI = {
       S.cards.push(c);
     }
     S.btns = el('div', 'mbtns', e);
+    // отдельный выбор сложности после «БОЙ С БОТОМ»
+    S.dp = el('div', 'mdiff', e);
+    S.dp.appendChild(pxCanvas('СЛОЖНОСТЬ БОТА', 3, ['#fff6c0', '#ffb030'], 0, 'center'));
+    const dr = el('div', 'mdrow', S.dp);
+    for (const [v, lab, sub, col] of [[1, 'ЛЕГКО', 'ДЛЯ РАЗМИНКИ', ['#d0ffd0', '#40c040']], [2, 'НОРМА', 'ЧЕСТНЫЙ БОЙ', ['#fff6c0', '#ffb030']], [3, 'НЕВОЗМОЖНО', 'БОТ ЧИТАЕТ КАЖДЫЙ УДАР', ['#ffd0c0', '#e02010']]]) {
+      const b = el('div', 'btn mdbtn', dr); b._v = v;
+      b.appendChild(pxCanvas(lab, 3, col)); b.appendChild(pxCanvas(sub, 1, '#d0b8b0', 0, 'center'));
+      b.onclick = e2 => { if (e2) e2.stopPropagation(); Sound.init(); Sound.play('select'); this.diffPicked(v); };
+      b.onpointerenter = () => { const i = this.items.indexOf(b); if (i >= 0 && i !== this.focus) this.setFocus(i); };
+    }
     S.R = new Raster(SPR_W, SPR_H); S.t = 0;
     S.tick = () => this.modesTick();
   },
   // r — результат матча (или null, если открыто из меню)
+  diffClose() { const S = this.S.modes; S.diffOn = false; S.el.classList.remove('dsel'); S.back = S.back0; this.refreshItems(); this.setFocus(1); },
+  diffPicked(v) { const S = this.S.modes; Settings.diff = v; saveSettings(); S.el.classList.remove('dsel'); S.back = S.back0; S.diffOn = true; this.pickMode('cpu'); },
   showModes(r) {
-    const S = this.S.modes; S.res = r; Sound.setQuiet(true); Sound.say('Выбери режим');
+    const S = this.S.modes; S.res = r; S.diffOn = false; S.el.classList.remove('dsel'); Sound.setQuiet(true); Sound.say('Выбери режим');
     S.head.innerHTML = ''; S.btns.innerHTML = '';
     if (r) {
       S.head.appendChild(pxCanvas(r.title, 3, r.col, 0, 'center'));
@@ -141,6 +153,11 @@ const UI = {
   },
   pickMode(mode) {
     const S = this.S.modes;
+    if (mode === 'cpu' && !S.diffOn) {
+      S.diffOn = true; S.el.classList.add('dsel'); S.back0 = S.back; S.back = () => this.diffClose();
+      Sound.say('Выбери сложность'); this.refreshItems(); this.setFocus((Settings.diff || 2) - 1); return;
+    }
+    S.diffOn = false;
     if (S.res) YA.showAd(() => { Game.paused = false; Sound.mute('pause', false); YA.gameStop(); Game.startDemo(); this.startSelect(mode); });
     else this.startSelect(mode);
   },
@@ -207,7 +224,7 @@ const UI = {
     const grid = el('div', 'grid', e); S.cells = [];
     // ряды: герои по 5 в ряд, затем брейнрот-мемы и «случайный»
     const heroes = CHARS.map((c, i) => i).filter(i => !CHARS[i].meme), memes = CHARS.map((c, i) => i).filter(i => CHARS[i].meme);
-    S.rows = []; for (let i = 0; i < heroes.length; i += 5) S.rows.push(heroes.slice(i, i + 5));
+    S.rows = []; for (let i = 0; i < heroes.length; i += 6) S.rows.push(heroes.slice(i, i + 6));
     S.rows.push(memes.concat([CHARS.length]));
     const rowEl = {};
     S.rows.forEach((row, ri) => {
@@ -322,11 +339,11 @@ const UI = {
       S['tag' + p].appendChild(pxCanvas(this.mode === 'cpu' && p === 1 ? 'СОПЕРНИК' : 'ИГРОК ' + (p + 1), 1, p ? '#8ad0ff' : '#ff9a7a'));
       info.innerHTML = '';
       if (ch) {
-        info.appendChild(pxCanvas(ch.name, ch.name.length > 12 ? 1 : 2, ['#fff6c0', '#ffb030'], 130, p ? 'right' : 'left'));
-        info.appendChild(pxCanvas(ch.title + ', ' + ch.world, 1, '#ffd0c0', 120, p ? 'right' : 'left'));
-        info.appendChild(pxCanvas(ch.desc, 1, '#c8b8c0', 120, p ? 'right' : 'left'));
-      } else info.appendChild(pxCanvas('СЛУЧАЙНЫЙ БОЕЦ', 2, ['#fff6c0', '#ffb030'], 130, p ? 'right' : 'left'));
-      if (S.lock[p]) info.appendChild(pxCanvas('ГОТОВ!', 2, ['#a8ffb0', '#22a034'], 130, p ? 'right' : 'left'));
+        info.appendChild(pxCanvas(ch.name, ch.name.length > 12 ? 1 : 2, ['#fff6c0', '#ffb030'], 112, p ? 'right' : 'left'));
+        info.appendChild(pxCanvas(ch.title + ', ' + ch.world, 1, '#ffd0c0', 92, p ? 'right' : 'left'));
+        info.appendChild(pxCanvas(ch.desc, 1, '#c8b8c0', 108, p ? 'right' : 'left'));
+      } else info.appendChild(pxCanvas('СЛУЧАЙНЫЙ БОЕЦ', 2, ['#fff6c0', '#ffb030'], 112, p ? 'right' : 'left'));
+      if (S.lock[p]) info.appendChild(pxCanvas('ГОТОВ!', 2, ['#a8ffb0', '#22a034'], 112, p ? 'right' : 'left'));
     }
   },
   selTick() {

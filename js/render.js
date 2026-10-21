@@ -114,6 +114,28 @@ class Raster {
       d[i] = (c & 0xff000000) | ((b + (cb - b) * k) << 16) | ((g + (cg - g) * k) << 8) | (r + (cr - r) * k);
     }
   }
+  // «Живописный» проход: вертикальный градиент света (верх светлее, ноги в тени)
+  // и тонкие внутренние тени на стыках деталей контрастного тона
+  paint() {
+    const w = this.w, h = this.h, d = this.d, t = this.tmp; t.set(d);
+    let y0 = h, y1 = 0;
+    for (let y = 0; y < h; y++) { const r = y * w; for (let x = 0; x < w; x++) if (t[r + x]) { if (y < y0) y0 = y; y1 = y; break; } }
+    if (y1 <= y0) return;
+    const ih = 1 / (y1 - y0), L = c => ((c & 255) * 3 + ((c >> 8) & 255) * 6 + ((c >> 16) & 255)) / 10;
+    for (let y = y0; y <= y1; y++) {
+      const gk = 1.1 - 0.24 * (y - y0) * ih, row = y * w;
+      for (let x = 1; x < w - 1; x++) {
+        const i = row + x, c = t[i]; if (!c) continue;
+        let k = gk;
+        // стык: сосед справа/снизу заметно светлее — этот пиксель в тени
+        const r = t[i + 1], b = y < h - 1 ? t[i + w] : 0, l = L(c);
+        if ((r && L(r) - l > 60) || (b && L(b) - l > 60)) k *= 0.8;
+        else if ((t[i - 1] && L(t[i - 1]) - l > 70) || (t[i - w] && L(t[i - w]) - l > 70)) k *= 0.88;
+        const R = Math.min(255, (c & 255) * k), G = Math.min(255, ((c >> 8) & 255) * k), B = Math.min(255, ((c >> 16) & 255) * k);
+        d[i] = ((c & 0xff000000) | (B << 16) | (G << 8) | R) >>> 0;
+      }
+    }
+  }
   // Выборочный (цветной) контур в один тонкий пиксель: тёмный, но с оттенком соседнего пикселя;
   // сверху/слева чуть светлее, снизу/справа — почти чистый тёмный
   outline(oc) {
@@ -457,8 +479,8 @@ function drawTorsoDefault(R, ch, J, P) {
     const wy = b.torso * 0.42, w = TP(J, 0.2, wy);
     tube(R, J.hip, w, b.waist, b.waist * 0.82, P.main, 0, tx.main);
     tube(R, w, J.neck, b.waist * 0.82, b.chest, P.main, 0, tx.main);
-    const bu = TP(J, b.chest * 0.62, b.torso - 6.2); sphere(R, bu.x, bu.y, b.bust || 2.3, P.top || P.main, 0);
-    ovoid(R, J.hip.x + Math.cos(J.ta) * 0.2, J.hip.y + 0.5, b.hips, b.hips * 0.72, P.hipCol || P.pants, 0);
+    const bu = TP(J, b.chest * 0.66, b.torso - 6.4); sphere(R, bu.x, bu.y, b.bust || 3.1, P.top || P.main, 0);
+    ovoid(R, J.hip.x - Math.cos(J.ta) * 0.6, J.hip.y + 0.6, b.hips * 1.16, b.hips * 0.84, P.hipCol || P.pants, 0);
   } else tube(R, J.hip, J.neck, b.waist, b.chest, P.main, 0, tx.main);
   if (P.belt) {
     const a = TP(J, -b.waist + 0.5, 1.5), c = TP(J, b.waist - 0.5, 1.5);
@@ -588,6 +610,7 @@ function renderFighter(R, ch, pose, f) {
   ao(R, J.shF, J.elF, 3.1 * m, 2.6 * m, 0.7); ao(R, J.elF, J.hdF, 2.6 * m, 2.9 * m, 0.7);
   drawArm(R, ch, J, 'F', P, 0, pose);
   if (D.front) D.front(R, J, P, ctx);
+  R.paint();
   R.outline(c32(P.outline || '#140c18'));
   if (f && f.g && typeof Stage !== 'undefined' && Stage.cur) R.rim(c32(RIM_COL[Stage.cur.id] || '#ffe6b8'), 0.5);
   if (f) {

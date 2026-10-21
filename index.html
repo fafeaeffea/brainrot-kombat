@@ -18,26 +18,26 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #s-menu.fade{opacity:0}
 .cabscreen{position:absolute;left:7.304em;top:2.870em;width:48em;height:27em;font-size:.7667em;background:linear-gradient(90deg,rgba(0,0,0,.75),rgba(0,0,0,.4) 40%,rgba(0,0,0,0) 60%)}
 #s-menu .menu-col{left:2.4em;transform:none;top:9.4em;min-width:19em;gap:.4em}
-#s-menu .btn{padding:.45em 1.2em;border-width:.2em}
+#s-menu .btn{padding:.55em 1.5em;border-width:.2em}
 #s-modes,#s-select,#s-tower,#s-moves,#s-controls,#s-settings,#s-ending{background:radial-gradient(ellipse at center,rgba(40,8,20,.82),rgba(5,2,8,.96))}
 #s-pause,#s-result{background:rgba(0,0,0,.55)}
 .logo{position:absolute;left:2em;top:.5em;display:flex;flex-direction:column;align-items:center;gap:.2em;filter:drop-shadow(0 0 .4em rgba(255,80,20,.6))}
 .menu-col{position:absolute;left:50%;top:12.6em;transform:translateX(-50%);display:flex;flex-direction:column;align-items:stretch;gap:.35em;min-width:15em}
 .menu-col.low{top:auto;bottom:.8em;flex-direction:row}
 .menu-col.set{top:4.6em;min-width:26em}
-.btn{display:flex;align-items:center;justify-content:center;gap:1em;padding:.2em 1em;background:linear-gradient(#3a1a24,#1e0c14);border:.2em solid #5a3040;box-shadow:inset 0 .1em 0 #6a3a4a;cursor:pointer}
+.btn{display:flex;align-items:center;justify-content:center;gap:1em;padding:.35em 1.25em;background:linear-gradient(#3a1a24,#1e0c14);border:.2em solid #5a3040;box-shadow:inset 0 .1em 0 #6a3a4a;cursor:pointer}
 .btn.foc,.btn:hover{border-color:#ffc040;background:linear-gradient(#7a2a1a,#3a0c0c);box-shadow:0 0 .8em rgba(255,150,40,.6)}
 .srow{justify-content:space-between}
 .stats{position:absolute;bottom:.6em;right:1em;display:flex}
 .sel-title{position:absolute;top:.9em;left:0;right:0;display:flex;justify-content:center}
-.side{position:absolute;top:3.2em;width:13em;display:flex;flex-direction:column;gap:.3em}
+.side{position:absolute;top:3.2em;width:9.5em;display:flex;flex-direction:column;gap:.3em}
 .side.left{left:.8em;align-items:flex-start}.side.right{right:.8em;align-items:flex-end}
-.prev{width:10em!important;height:10em!important;box-shadow:0 0 .8em rgba(0,0,0,.8)}
+.prev{width:8.6em!important;height:8.6em!important;box-shadow:0 0 .8em rgba(0,0,0,.8)}
 .side .info{display:flex;flex-direction:column;gap:.3em;margin-top:.2em;background:rgba(0,0,0,.55);padding:.4em;align-items:inherit;align-self:stretch}
 .grid{position:absolute;left:50%;top:5.2em;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:.3em}
-.grow{display:flex;gap:.25em}
-.cell{width:3.2em;height:3.2em;display:flex;align-items:center;justify-content:center;background:#1a0c14;border:.2em solid #3a2030;cursor:pointer;position:relative}
-.cell canvas{width:3em!important;height:3em!important}
+.grow{display:flex;gap:.18em}
+.cell{width:2.95em;height:2.95em;display:flex;align-items:center;justify-content:center;background:#1a0c14;border:.2em solid #3a2030;cursor:pointer;position:relative}
+.cell canvas{width:2.8em!important;height:2.8em!important}
 .cell.p1{border-color:#ff6a3a;box-shadow:0 0 .6em #ff6a3a}
 .cell.p2{border-color:#3aa8ff;box-shadow:0 0 .6em #3aa8ff}
 .cell.p1.p2{border-color:#ff6a3a #3aa8ff #3aa8ff #ff6a3a}
@@ -46,7 +46,7 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .hint{position:absolute;top:20.7em;left:50%;transform:translateX(-50%);display:flex;justify-content:center}
 .backbtn{position:absolute;left:.8em;bottom:.6em}
 #s-select .backbtn{left:50%;transform:translateX(-50%);bottom:.5em}
-.backbtn .btn{padding:.2em .8em}
+.backbtn .btn{padding:.3em 1em}
 .tower{position:absolute;left:50%;top:3.4em;transform:translateX(-50%);display:flex;flex-direction:column;gap:.25em}
 .trow{display:flex;align-items:center;gap:.6em;padding:0 .6em;height:2.5em;background:rgba(30,10,20,.8);border:.15em solid #3a2030;min-width:20em;position:relative}
 .trow.cur{border-color:#ffc040;background:rgba(90,30,10,.85)}
@@ -95,22 +95,27 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .mcards{position:absolute;left:50%;top:5.4em;transform:translateX(-50%);display:flex;gap:1em}
 .mcard{flex-direction:column;gap:.5em;padding:.5em .5em .7em;width:13.4em;justify-content:flex-start}
 .mart{width:12.8em!important;height:9.6em!important;border:.1em solid #000}
+.mdiff{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:1.2em;background:rgba(8,2,8,.82);z-index:5}
+#s-modes.dsel .mdiff{display:flex}
+#s-modes.dsel .mcards,#s-modes.dsel .mbtns{display:none}
+.mdrow{display:flex;gap:1em}
+.mdbtn{flex-direction:column;gap:.5em;padding:1em .8em;min-width:10em}
 .mcard.foc{transform:translateY(-.3em)}
 .mbtns{position:absolute;left:50%;bottom:.9em;transform:translateX(-50%);display:flex;gap:.6em}
 .hudbtns{position:absolute;left:50%;bottom:.5em;transform:translateX(-50%);display:none;gap:.4em;pointer-events:auto;z-index:5}
 .hudbtns.on{display:flex}
-.hbtn{padding:.25em .6em;background:rgba(10,4,12,.7);border:.12em solid rgba(255,208,64,.55);cursor:pointer}
+.hbtn{padding:.4em .85em;background:rgba(10,4,12,.7);border:.12em solid rgba(255,208,64,.55);cursor:pointer}
 .hbtn:hover{background:rgba(90,30,20,.85)}
 .aprev{position:absolute;left:50%;top:3.6em;transform:translateX(-50%);width:24em!important;height:13.5em!important;border:.2em solid #c08a30;box-shadow:0 0 1em rgba(0,0,0,.8)}
 .aname{position:absolute;left:50%;top:15.6em;transform:translateX(-50%);display:flex;background:rgba(0,0,0,.6);padding:.2em .8em}
 .agrid{position:absolute;left:50%;top:18.1em;transform:translateX(-50%);display:grid;grid-template-columns:repeat(8,4.6em);gap:.3em}
-.acell{padding:0;width:4.6em;height:2.6em;border-width:.15em}
+.acell{padding:0;width:5em;height:2.8em;border-width:.15em}
 .acell canvas{width:100%!important;height:100%!important}
 .acell.sel{border-color:#ffd040;box-shadow:0 0 .5em #ffd040}
 #s-arena{background:rgba(6,2,10,.82)}
 #s-arena .backbtn{bottom:.4em}
 .adiff{position:absolute;right:.8em;top:4.2em;flex-direction:column;gap:.35em;align-items:stretch;width:10em}
-.dbtn{display:flex;justify-content:center;padding:.4em .3em;background:linear-gradient(#3a1a24,#1e0c14);border:.15em solid #5a3040;cursor:pointer}
+.dbtn{display:flex;justify-content:center;padding:.55em .4em;background:linear-gradient(#3a1a24,#1e0c14);border:.15em solid #5a3040;cursor:pointer}
 .dbtn.on{border-color:#ffd040;box-shadow:0 0 .5em #ffd040;background:#5a2a10}
 </style>
 </head>
@@ -131,6 +136,7 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 <script src="js/fighter.js"></script>
 <script src="js/unique.js"></script>
 <script src="js/heroines.js"></script>
+<script src="js/newchars.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/stages.js"></script>
 <script src="js/fatality.js"></script>
