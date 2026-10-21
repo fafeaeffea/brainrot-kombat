@@ -434,6 +434,9 @@ const Game = {
       ctx.drawImage(this.scene, x0 * SK, y0 * SK, vw * SK, vh * SK, 0, 0, OW, OH);
     } else ctx.drawImage(this.scene, 0, 0, OW, OH);
     ctx.setTransform(OUT_K, 0, 0, OUT_K, 0, 0);
+    // мягкая виньетка: взгляд собирается на бойцах
+    if (!this.vig) { const g = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.35, W / 2, H * 0.55, W * 0.62); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,10,0.42)'); this.vig = g; }
+    ctx.fillStyle = this.vig; ctx.fillRect(0, 0, W, H);
     if (this.impactT > 0) this.drawImpact(ctx);
     if (this.redA > 0) { ctx.globalAlpha = this.redA; ctx.fillStyle = '#c00010'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
     if (this.cine > 0.02) this.drawCine(ctx);
@@ -511,7 +514,7 @@ const Game = {
     drawText(ctx, String(tv), W / 2, 17, 2, this.phase === 'finish' ? ['#ffd0c0', '#e02010'] : ['#fff3a0', '#e0a020']);
     // победы в раундах
     for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
-      const x = i === 0 ? 14 + j * 11 : W - 22 - j * 11, y = 45;
+      const x = i === 0 ? 14 + j * 11 : W - 22 - j * 11, y = 52;
       if (j < this.wins[i]) { pdisk(ctx, x + 4, y, 4.5, '#5a3a10'); pdisk(ctx, x + 4, y, 3.5, '#ffd040'); ctx.fillStyle = '#c08010'; ctx.fillRect(x + 3, y - 1, 3, 3); ctx.fillStyle = '#fff6c0'; ctx.fillRect(x + 2, y - 3, 2, 1); }
       else { pdisk(ctx, x + 4, y, 4.5, '#1a1218'); pdisk(ctx, x + 4, y, 3.5, '#3a2a30'); }
     }
@@ -521,7 +524,7 @@ const Game = {
         const n = c.n, word = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 > 20) ? 'УДАРА' : 'УДАРОВ';
         const x = i === 0 ? 16 : W - 16, al = i === 0 ? 'left' : 'right';
         ctx.globalAlpha = c.t > 55 ? (70 - c.t) / 15 : 1;
-        drawText(ctx, n + ' ' + word, x, 60, 2, ['#ffffff', '#ffd040'], al);
+        drawText(ctx, n + ' ' + word, x, 66, 2, ['#ffffff', '#ffd040'], al);
         ctx.globalAlpha = 1;
       }
     }
@@ -587,6 +590,11 @@ const Game = {
     for (let j = 0; j < h; j++) { ctx.fillStyle = low ? (j < 4 ? '#ff8a6a' : '#d03a2a') : j < 2 ? '#a8ffb0' : j < 6 ? '#3ad04a' : j < 9 ? '#22a034' : '#167024'; ctx.fillRect(right ? x + w - hw : x, y + j, hw, 1); }
     ctx.fillStyle = 'rgba(0,0,0,0.25)'; for (let i = 8; i < w; i += 8) ctx.fillRect(x + i, y + h - 3, 1, 3);
     drawText(ctx, f.ch.name, right ? x + w - 3 : x + 3, y + h + 9, 1, '#ffffff', right ? 'right' : 'left');
+    // готовность коронного приёма
+    const k = 1 - clamp((f.uCd || 0) / UNIQUE_CD, 0, 1), gw = 40, gx = right ? x + w - gw : x, gy = y + h + 15, ready = k >= 1;
+    ctx.fillStyle = '#0c060a'; ctx.fillRect(gx - 1, gy - 1, gw + 2, 5);
+    ctx.fillStyle = ready ? ((this.frame >> 3) & 1 ? '#ffe070' : '#ffb030') : '#6a4a20'; ctx.fillRect(right ? gx + gw - Math.round(gw * k) : gx, gy, Math.round(gw * k), 3);
+    drawText(ctx, ready ? 'КОРОННЫЙ!' : 'КОРОННЫЙ', right ? gx - 3 : gx + gw + 3, gy + 2, 1, ready ? '#ffe070' : '#8a7050', right ? 'right' : 'left');
   },
   drawAnn(ctx) {
     const A = this.ann; if (!A || A.t > A.dur) return;

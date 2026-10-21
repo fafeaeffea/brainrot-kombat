@@ -82,7 +82,7 @@ const HEROINES = [
     id: 'kiyomi', name: 'Киоми', title: 'Мастер веера', world: 'Земля сакуры', g: 'f',
     desc: 'Придворная танцовщица и тайный клинок императора. Её стальной веер режет, как ветер.',
     pal: { skin: '#f3d2b4', main: '#c0202e', sleeve: '#c0202e', fore: '#f3d2b4', glove: '#f3d2b4', pants: '#221826', boots: '#efe6d6', belt: '#e3b341', obi: '#e3b341', trim: '#ffd86a', inner: '#f4eee6', hair: '#17121c', eye: '#5a2a1a', fx: '#ff6a8a' },
-    build: BUILD({ chest: 6.2, waist: 3.9, limb: 0.86, torso: 18.5, leg1: 15.5, leg2: 15.5 }),
+    build: BUILD({ chest: 6.3, waist: 3.6, hips: 5.5, limb: 0.84, torso: 18.5, leg1: 15.8, leg2: 15.8 }),
     stance: { hF: [11, 5], hB: [7, 9], wa: -35 },
     weapon: 'fan',
     draw: {
@@ -122,7 +122,7 @@ const HEROINES = [
     id: 'nefera', name: 'Нефера', title: 'Царица песков', world: 'Древний Кемет', g: 'f',
     desc: 'Бессмертная царица, пробуждённая из гробницы. Пески и скарабеи служат ей.',
     pal: { skin: '#c98a5c', main: '#f1e8d2', sleeve: '#c98a5c', fore: '#c98a5c', glove: '#c98a5c', pants: '#f1e8d2', boots: '#e3b341', belt: '#e3b341', gold: '#e3b341', lapis: '#2a4fb0', hair: '#140e10', eye: '#3a2410', fx: '#ffd040' },
-    build: BUILD({ chest: 6.2, waist: 3.8, limb: 0.86, torso: 18.5, leg1: 15.5, leg2: 15.5 }),
+    build: BUILD({ chest: 6.3, waist: 3.5, hips: 5.5, limb: 0.84, torso: 18.5, leg1: 15.8, leg2: 15.8 }),
     stance: { hF: [11, 4], hB: [7, 9], wa: -30 },
     weapon: 'khopesh',
     draw: {
@@ -162,7 +162,7 @@ const HEROINES = [
     id: 'nova', name: 'Нова', title: 'Неоновая гонщица', world: 'Кибер-Сити 2077', g: 'f',
     desc: 'Королева ночных гонок. Неоновая дубинка и реакция быстрее света.',
     pal: { skin: '#f0c8a8', main: '#22243a', sleeve: '#22243a', fore: '#2e3150', glove: '#14141c', pants: '#1c1e30', boots: '#e8ecf4', belt: '#ff3aa0', neon: '#ff3aa0', neon2: '#3af0ff', hair: '#ff4ab0', eye: '#2ad0ff', fx: '#3af0ff' },
-    build: BUILD({ chest: 6.1, waist: 3.9, limb: 0.86, torso: 18.5, leg1: 15.5, leg2: 15.5 }),
+    build: BUILD({ chest: 6.2, waist: 3.5, hips: 5.4, limb: 0.84, torso: 18.5, leg1: 15.8, leg2: 15.8 }),
     stance: { hF: [11, 5], hB: [7, 9], wa: -45 },
     weapon: 'baton',
     draw: {

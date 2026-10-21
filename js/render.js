@@ -101,6 +101,19 @@ class Raster {
         for (let x = Math.max(0, Math.ceil(xs[k] - 0.5)); x <= Math.min(this.w - 1, Math.floor(xs[k + 1] - 0.5)); x++) this.d[y * this.w + x] = c;
     }
   }
+  // Контровой свет: тонкая цветная кромка по заднему и верхнему краю силуэта (под контуром)
+  rim(col, a) {
+    const w = this.w, h = this.h, d = this.d, t = this.tmp; t.set(d);
+    const cr = col & 255, cg = (col >> 8) & 255, cb = (col >> 16) & 255;
+    for (let y = 2; y < h; y++) for (let x = 2; x < w; x++) {
+      const i = y * w + x, c = t[i]; if (!c) continue;
+      let k = 0;
+      if (!t[i - 2] && t[i - 1]) k = a; else if (!t[i - 2 * w] && t[i - w]) k = a * 0.55;
+      if (!k) continue;
+      const r = c & 255, g = (c >> 8) & 255, b = (c >> 16) & 255;
+      d[i] = (c & 0xff000000) | ((b + (cb - b) * k) << 16) | ((g + (cg - g) * k) << 8) | (r + (cr - r) * k);
+    }
+  }
   // Выборочный (цветной) контур в один тонкий пиксель: тёмный, но с оттенком соседнего пикселя;
   // сверху/слева чуть светлее, снизу/справа — почти чистый тёмный
   outline(oc) {
@@ -439,7 +452,14 @@ function drawLeg(R, ch, J, side, P, k) {
 }
 function drawTorsoDefault(R, ch, J, P) {
   const b = ch.build, tx = (ch.draw && ch.draw.tex) || ch.tex || {};
-  tube(R, J.hip, J.neck, b.waist, b.chest, P.main, 0, tx.main);
+  if (b.hips) {
+    // женский силуэт: тонкая талия, округлые бёдра и мягкий контур груди
+    const wy = b.torso * 0.42, w = TP(J, 0.2, wy);
+    tube(R, J.hip, w, b.waist, b.waist * 0.82, P.main, 0, tx.main);
+    tube(R, w, J.neck, b.waist * 0.82, b.chest, P.main, 0, tx.main);
+    const bu = TP(J, b.chest * 0.62, b.torso - 6.2); sphere(R, bu.x, bu.y, b.bust || 2.3, P.top || P.main, 0);
+    ovoid(R, J.hip.x + Math.cos(J.ta) * 0.2, J.hip.y + 0.5, b.hips, b.hips * 0.72, P.hipCol || P.pants, 0);
+  } else tube(R, J.hip, J.neck, b.waist, b.chest, P.main, 0, tx.main);
   if (P.belt) {
     const a = TP(J, -b.waist + 0.5, 1.5), c = TP(J, b.waist - 0.5, 1.5);
     tube(R, a, c, 1.5, 1.5, P.belt, 0);
@@ -536,6 +556,8 @@ function drawSkeleton(R, ch, J) {
 }
 
 // Главная функция: рисует бойца в растр (смотрит вправо)
+// цвет контрового света под освещение арены
+const RIM_COL = { pit: '#ff8a3a', forge: '#ffa04a', ice: '#c8f2ff', city: '#ff7ad8', station: '#8affff', metro: '#fff0a0', arcade: '#ff6ae0', dome: '#7ae8ff', graveyard: '#a8ffb8', ship: '#c0d8ff', desert: '#ffd890', throne: '#ffc070', roof: '#ffb0a0', temple: '#ffb070', beach: '#fff4c0' };
 function renderFighter(R, ch, pose, f) {
   R.clear();
   const ox = SPR_OX, oy = SPR_OY, P = ch.pal;
@@ -567,6 +589,7 @@ function renderFighter(R, ch, pose, f) {
   drawArm(R, ch, J, 'F', P, 0, pose);
   if (D.front) D.front(R, J, P, ctx);
   R.outline(c32(P.outline || '#140c18'));
+  if (f && f.g && typeof Stage !== 'undefined' && Stage.cur) R.rim(c32(RIM_COL[Stage.cur.id] || '#ffe6b8'), 0.5);
   if (f) {
     if (f.tint) R.tint(f.tint, f.tintK == null ? 1 : f.tintK);
     if (f.flash) R.tint('flash', 0.75);

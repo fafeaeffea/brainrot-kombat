@@ -13,14 +13,14 @@ class AI {
   constructor(f, level) {
     this.f = f; this.lv = clamp(level, 1, 3); this.q = []; this.cool = 20; this.t = 0; this.combo = null; this.seenAtk = null; this.decided = null; this.fatT = 0; this.after = null;
     const L = this.lv - 1;
-    this.react = [9, 5, 2][L];            // кадров до реакции на атаку
-    this.blockP = [0.45, 0.75, 0.93][L];  // шанс заблокировать увиденную атаку
-    this.readLow = [0.5, 0.8, 0.95][L];   // правильно угадать верх/низ
-    this.punishP = [0.35, 0.7, 0.92][L];
-    this.aaP = [0.3, 0.65, 0.9][L];       // анти-эйр
-    this.aggr = [0.45, 0.65, 0.85][L];
-    this.think = [16, 9, 4][L];           // пауза между решениями
-    this.comboLen = [2, 3, 4][L];
+    this.react = [16, 5, 1][L];            // кадров до реакции на атаку
+    this.blockP = [0.25, 0.75, 0.98][L];  // шанс заблокировать увиденную атаку
+    this.readLow = [0.4, 0.8, 1][L];   // правильно угадать верх/низ
+    this.punishP = [0.15, 0.7, 1][L];
+    this.aaP = [0.15, 0.65, 0.97][L];       // анти-эйр
+    this.aggr = [0.3, 0.65, 0.9][L];
+    this.think = [26, 9, 2][L];           // пауза между решениями
+    this.comboLen = [2, 3, 4][L]; this.dmgK = [0.8, 1, 1.25][L];
     this.fatalP = [0.5, 0.85, 1][L];
   }
   push(n, c) { this.q.push({ n, c, first: true }); }

@@ -63,7 +63,7 @@ const UI = {
   },
   btn(parent, label, fn, cls = '') {
     const b = el('div', 'btn ' + cls, parent);
-    b.appendChild(pxCanvas(label, 2, ['#fff6d0', '#ffc040']));
+    b.appendChild(pxCanvas(label, cls.includes('big') ? 3 : 2, ['#fff6d0', '#ffc040']));
     b.onclick = e => { e.stopPropagation(); Sound.init(); Sound.play('select'); fn(); };
     b.onpointerenter = () => { const i = this.items.indexOf(b); if (i >= 0 && i !== this.focus) { this.setFocus(i); } };
     return b;
@@ -96,10 +96,10 @@ const UI = {
     logo.appendChild(pxCanvas('КОМБАТ', 5, ['#ffffff', '#ffd040', '#a04010']));
     logo.appendChild(pxCanvas('ПИКСЕЛЬНЫЙ ФАЙТИНГ С ФАТАЛИТИ', 1, '#ffd0c0'));
     const col = el('div', 'menu-col', e);
-    this.btn(col, 'ИГРАТЬ', () => this.enterArcade(() => this.showModes(null)));
-    this.btn(col, 'СПИСОК УДАРОВ', () => this.enterArcade(() => this.show('moves')));
-    this.btn(col, 'УПРАВЛЕНИЕ', () => this.enterArcade(() => this.show('controls')));
-    this.btn(col, 'НАСТРОЙКИ', () => this.enterArcade(() => this.show('settings')));
+    this.btn(col, 'ИГРАТЬ', () => this.enterArcade(() => this.showModes(null)), 'big');
+    this.btn(col, 'СПИСОК УДАРОВ', () => this.enterArcade(() => this.show('moves')), 'big');
+    this.btn(col, 'УПРАВЛЕНИЕ', () => this.enterArcade(() => this.show('controls')), 'big');
+    this.btn(col, 'НАСТРОЙКИ', () => this.enterArcade(() => this.show('settings')), 'big');
     S.stats = el('div', 'stats', e);
     S.onShow = () => { S.stats.innerHTML = ''; S.stats.appendChild(pxCanvas('ПОБЕД: ' + Store.get('wins', 0) + '    ФАТАЛИТИ: ' + Store.get('fatalities', 0), 1, '#c0a0a0')); };
   },
@@ -389,6 +389,14 @@ const UI = {
       c.onpointerenter = () => { const k = this.items.indexOf(c); if (k >= 0 && k !== this.focus) { this.setFocus(k); this.arenaSel(i, true); } };
       S.cells.push(c);
     }
+    // сложность бота прямо перед боем
+    S.diff = el('div', 'adiff', e); S.diff.appendChild(pxCanvas('СЛОЖНОСТЬ', 1, '#8ad0ff', 0, 'center')); S.dbtns = [];
+    for (const [v, lab, col] of [[1, 'ЛЕГКО', ['#d0ffd0', '#40c040']], [2, 'НОРМА', ['#fff6c0', '#ffb030']], [3, 'НЕВОЗМОЖНО', ['#ffd0c0', '#e02010']]]) {
+      const b = el('div', 'dbtn', S.diff); b.appendChild(pxCanvas(lab, 1, col)); b._v = v;
+      b.onclick = ev => { if (ev) ev.stopPropagation(); Sound.init(); Sound.play('select'); this.arenaDiff(v); };
+      S.dbtns.push(b);
+    }
+    S.diff.appendChild(pxCanvas('КЛАВИША K - СМЕНИТЬ', 1, '#a090a0', 0, 'center'));
     const bb = el('div', 'backbtn crow2', e);
     this.btn(bb, 'НАЗАД', () => this.arenaBack());
     this.btn(bb, 'В БОЙ!', () => this.arenaGo());
@@ -400,7 +408,8 @@ const UI = {
         let i = S.sel;
         if (m === 'left') i = (i + n - 1) % n; else if (m === 'right') i = (i + 1) % n;
         else if (m === 'up') i = i - cols >= 0 ? i - cols : i; else if (m === 'down') i = Math.min(n - 1, i + cols);
-        else if (m === 'ok' || m === 'ok2') { this.arenaGo(); continue; }
+        else if (m === 'ok') { this.arenaGo(); continue; }
+        else if (m === 'ok2') { if (S.cfg.mode === 'cpu') { Sound.play('move'); this.arenaDiff(Settings.diff % 3 + 1); } continue; }
         else if (m === 'back' || m === 'pause') { Sound.play('back'); this.arenaBack(); continue; }
         if (i !== S.sel) this.arenaSel(i);
       }
@@ -423,6 +432,7 @@ const UI = {
   },
   showArena(cfg) {
     const S = this.S.arena; S.cfg = cfg; S.going = false; S.t = 0;
+    S.diff.style.display = cfg.mode === 'cpu' ? 'flex' : 'none'; if (cfg.mode === 'cpu') this.arenaDiff(Settings.diff || 2);
     const last = Store.get('lastStage', STAGES.length); S.sel = last <= STAGES.length ? last : STAGES.length;
     S.cells.forEach((c, i) => {
       if (i < STAGES.length) this.stageThumb(i, c._cv, 0);
@@ -439,6 +449,10 @@ const UI = {
     const k = this.items.indexOf(S.cells[i]); if (k >= 0) this.setFocus(k);
     S.name.innerHTML = '';
     S.name.appendChild(pxCanvas(i < STAGES.length ? STAGES[i].name.toUpperCase() : 'СЛУЧАЙНАЯ АРЕНА', 2, ['#fff6c0', '#ffb030'], 0, 'center'));
+  },
+  arenaDiff(v) {
+    const S = this.S.arena; Settings.diff = v; saveSettings(); if (S.cfg && S.cfg.mode === 'cpu') S.cfg.ai2 = v;
+    S.dbtns.forEach(b => b.classList.toggle('on', b._v === v));
   },
   arenaTick() {
     const S = this.S.arena; S.t++;
@@ -659,7 +673,7 @@ const UI = {
     el('div', 'sel-title', e).appendChild(pxCanvas('НАСТРОЙКИ', 3, ['#fff6c0', '#ffb030']));
     const col = el('div', 'menu-col set', e);
     const opts = [
-      ['diff', 'СЛОЖНОСТЬ БОТА', [[1, 'ЛЁГКАЯ'], [2, 'СРЕДНЯЯ'], [3, 'ВЫСОКАЯ']]],
+      ['diff', 'СЛОЖНОСТЬ БОТА', [[1, 'ЛЕГКО'], [2, 'НОРМА'], [3, 'НЕВОЗМОЖНО']]],
       ['time', 'ВРЕМЯ РАУНДА', [[60, '60 СЕК'], [99, '99 СЕК'], [0, 'БЕЗ ЛИМИТА']]],
       ['blood', 'КРОВЬ', [[true, 'ВКЛ'], [false, 'ВЫКЛ']]],
       ['music', 'МУЗЫКА', [[true, 'ВКЛ'], [false, 'ВЫКЛ']]],

@@ -20,6 +20,7 @@ MOVES.jab.chain.push('backfist', 'overhead', 'pushkick'); MOVES.cross.chain.push
 // для оружия чуть дальше достаёт
 for (const k of ['jab', 'cross']) MOVES[k + 'W'] = Object.assign({}, MOVES[k], { box: [6, -58, 34, 22], dmg: MOVES[k].dmg + 1, snd: 'slashHit' });
 
+const UNIQUE_CD = 240; // 4 секунды между коронными приёмами
 const DASH = {
   teleport: { kind: 'tele', col: 'fire', dmg: 11, kd: true, box: [4, -54, 20, 12], name: 'Огненный телепорт' },
   warp: { kind: 'tele', col: 'souls', dmg: 11, kd: true, kick: true, box: [4, -62, 24, 16], name: 'Теневой шаг' },
@@ -35,7 +36,7 @@ const DASH = {
 
 class Fighter {
   constructor(ch, idx, game) { this.ch = ch; this.idx = idx; this.g = game; this.R = new Raster(SPR_W, SPR_H); this.taken = 0; this.reset(STAGE_W / 2, 1); }
-  reset(x, facing) {
+  reset(x, facing) { this.uCd = 0; this.dCd = 0; this.pCd = 0;
     Object.assign(this, {
       x, y: GROUND, vx: 0, vy: 0, facing, hp: 100, dhp: 100, st: 'idle', t: 0, anim: randi(0, 100), move: null, moveName: '', mt: 0, hitDone: false,
       stun: 0, combo: 0, juggle: 0, alpha: 1, hidden: false, tint: null, tintK: 1, flash: 0, frozen: 0, invul: 0, altPunch: false, airAttacked: false,
@@ -68,6 +69,7 @@ class Fighter {
     this.t++; this.anim++;
     if (this.flash > 0) this.flash--;
     if (this.invul > 0) this.invul--;
+    if (this.uCd > 0) this.uCd--; if (this.dCd > 0) this.dCd--; if (this.pCd > 0) this.pCd--;
     if (this.ghost > 0) this.ghost--;
     if (this.st === 'frozen') {
       this.physics();
@@ -153,10 +155,11 @@ class Fighter {
   }
   trySpecial(kind) {
     if (this.air) return false;
-    if (kind === 'proj') { if (this.g.projOf(this)) return false; this.face(); this.setSt('special'); this.mt = 0; Sound.play('cast'); return true; }
-    if (kind === 'dash') { this.face(); this.startDash(); return true; }
+    if (kind === 'proj') { if (this.g.projOf(this) || this.pCd > 0) return false; this.pCd = 50; this.face(); this.setSt('special'); this.mt = 0; Sound.play('cast'); return true; }
+    if (kind === 'dash') { if (this.dCd > 0) return false; this.face(); this.startDash(); this.dCd = 70; return true; }
     if (kind === 'fatal') return this.g.tryFatality(this);
-    if (kind === 'unique') { this.landT = 0; this.burst = false; this.countered = false; return this.startUnique(); }
+    // коронный приём — с перезарядкой, чтобы его нельзя было спамить
+    if (kind === 'unique') { if (this.uCd > 0) return false; this.landT = 0; this.burst = false; this.countered = false; const ok = this.startUnique(); if (ok) this.uCd = UNIQUE_CD; return ok; }
     return false;
   }
   specialUpdate() {
@@ -277,7 +280,8 @@ class Fighter {
       if (this.g.dmgPop) this.g.dmgPop(this, bd, true);
       return 'block';
     }
-    let dmg = h.dmg;
+    const bot = this.g.ai && this.g.ai[this.opp.idx];
+    let dmg = h.dmg * (bot && bot.dmgK ? bot.dmgK : 1);
     const airborne = this.air || this.st === 'fall';
     if (airborne) { this.juggle++; dmg *= Math.pow(0.72, this.juggle); }
     dmg = Math.max(1, Math.round(dmg));

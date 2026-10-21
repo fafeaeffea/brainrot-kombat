@@ -88,7 +88,7 @@ const CHARS = [
     id: 'yuki', name: 'Юки', title: 'Ледяная куноити', world: 'Северный храм', g: 'f',
     desc: 'Хранительница вечной мерзлоты. Замораживает врагов одним взглядом.',
     pal: { skin: '#f1c7a6', main: '#2f7fd0', sleeve: '#2f7fd0', fore: '#d6efff', glove: '#d6efff', pants: '#2f7fd0', boots: '#d6efff', belt: '#d6efff', beltKnot: true, hood: '#2f7fd0', mask: '#d6efff', eye: '#ffffff', pupil: '#2a6fd0', hair: '#231d3d', fx: '#7fdcff' },
-    build: BUILD({ chest: 6, waist: 4.7, limb: 0.92 }),
+    build: BUILD({ chest: 6.2, waist: 3.7, hips: 5.4, limb: 0.86, torso: 18.5, leg1: 15.5, leg2: 15.5 }),
     stance: { hF: [10, 5], hB: [7, 8] },
     draw: {
       tex: { sleeve: foldTex(5, 3, 10), pants: foldTex(6, 4, 13), fore: wrapTex(3, 2, 10), boots: wrapTex(3, 1, 7) },
@@ -340,7 +340,7 @@ const CHARS = [
     id: 'morena', name: 'Морена', title: 'Некромантка', world: 'Королевство Мглы', g: 'f',
     desc: 'Повелительница мёртвых. Каждая победа — новая душа в коллекцию.',
     pal: { skin: '#d9d2ea', main: '#4b2a6e', sleeve: '#4b2a6e', fore: '#d9d2ea', glove: '#d9d2ea', pants: '#2f1a45', boots: '#2a1a33', belt: '#c9a227', robe: '#4b2a6e', trim: '#c9a227', hair: '#efeaff', eye: '#d07bff', fx: '#c06bff' },
-    build: BUILD({ chest: 6.4, waist: 3.9, limb: 0.86, torso: 18, leg1: 15.5, leg2: 15.5 }),
+    build: BUILD({ chest: 6.3, waist: 3.6, hips: 5.4, limb: 0.84, torso: 18.5, leg1: 15.8, leg2: 15.8 }),
     stance: { hF: [9, 6], hB: [6, 9], torso: 6 },
     draw: {
       back(R, J, P, c) {

@@ -1,7 +1,7 @@
 'use strict';
 // Главное меню внутри аркадного автомата: экран автомата показывает игру
 const Cabinet = {
-  SCR: { x: 84, y: 28, w: 312, h: 176 },
+  SCR: { x: 56, y: 22, w: 368, h: 207 },
   cv: null, buf: null, joy: 0, joyT: 0, btnT: 0, coinT: 0,
   build() {
     const [cv, c] = mkCanvas(W, H), r = rng(77), S = this.SCR;
@@ -25,20 +25,20 @@ const Cabinet = {
     rect(c, X0 - 2, 0, 6, 270, '#ff2a6a'); rect(c, X1 - 4, 0, 6, 270, '#ff2a6a'); rect(c, X0 - 1, 0, 2, 270, '#ffa0c0'); rect(c, X1 - 3, 0, 2, 270, '#ffa0c0');
     ditherV(c, X0 + 4, 0, X1 - X0 - 8, 270, ['#3a0610', '#5a0a18', '#3a0610']);
     // вывеска
-    rect(c, X0 + 8, 1, X1 - X0 - 16, 22, '#c0c4cc'); rect(c, X0 + 10, 2, X1 - X0 - 20, 19, '#1a0408');
-    ditherV(c, X0 + 12, 4, X1 - X0 - 24, 15, ['#ffe070', '#ff9a2a', '#e0401a']);
-    drawText(c, 'БРЕЙНРОТ КОМБАТ', W / 2, 12, 2, ['#ffffff', '#ffe8a0', '#ffb030'], 'center', '#3a0408', '#3a0408');
+    rect(c, X0 + 8, 0, X1 - X0 - 16, 17, '#c0c4cc'); rect(c, X0 + 10, 1, X1 - X0 - 20, 15, '#1a0408');
+    ditherV(c, X0 + 12, 2, X1 - X0 - 24, 12, ['#ffe070', '#ff9a2a', '#e0401a']);
+    drawText(c, 'БРЕЙНРОТ КОМБАТ', W / 2, 8, 1, ['#ffffff', '#ffe8a0', '#ffb030'], 'center', '#3a0408', '#3a0408');
     // рамка экрана
     rect(c, S.x - 10, S.y - 4, S.w + 20, S.h + 10, '#0a0a10'); rect(c, S.x - 8, S.y - 2, S.w + 16, S.h + 6, '#14141c');
     c.clearRect(S.x, S.y, S.w, S.h);
     // наклейки на рамке
     // пульт
     const py = S.y + S.h + 6;
-    for (let y = py; y < py + 34; y++) { const k = (y - py) / 34, ext = Math.round(k * 10); rect(c, X0 - ext, y, X1 - X0 + ext * 2, 1, y < py + 3 ? '#5a4a6a' : k < 0.5 ? '#2a1a34' : '#20142a'); }
-    rect(c, X0 - 10, py + 34, X1 - X0 + 20, 3, '#ff2a6a');
+    for (let y = py; y < py + 30; y++) { const k = (y - py) / 30, ext = Math.round(k * 10); rect(c, X0 - ext, y, X1 - X0 + ext * 2, 1, y < py + 3 ? '#5a4a6a' : k < 0.5 ? '#2a1a34' : '#20142a'); }
+    rect(c, X0 - 10, py + 30, X1 - X0 + 20, 3, '#ff2a6a');
     // рисунок на пульте: молнии
     c.globalAlpha = 0.35; for (let i = 0; i < 4; i++) bolt(c, X0 + 20 + i * 80, py + 5, X0 + 50 + i * 80, py + 30, '#ffd040', 5, 6, 1); c.globalAlpha = 1;
-    drawText(c, 'ДВИЖЕНИЕ', 150, py + 30, 1, '#c0a0c0'); drawText(c, 'РУКА  НОГА  БЛОК', 262, py + 30, 1, '#c0a0c0');
+    
     // монетоприёмник
     const cy = py + 38;
     rect(c, 196, cy, 88, 270 - cy, '#4a4a54'); rect(c, 198, cy + 2, 84, 270 - cy, '#6a6a76'); rect(c, 198, cy + 2, 84, 1, '#9a9aa6');
@@ -73,15 +73,15 @@ const Cabinet = {
   // мигающие лампы, джойстик и кнопки реагируют на управление
   drawLive(c, t) {
     const S = this.SCR, py = S.y + S.h + 6;
-    for (let i = 0; i < 20; i++) { const on = ((t >> 3) + i) % 3 === 0; c.fillStyle = on ? '#fff6c0' : '#7a4a10'; c.fillRect(84 + i * 16, 0, 3, 1); c.fillRect(84 + i * 16, 22, 3, 2); }
+    for (let i = 0; i < 24; i++) { const on = ((t >> 3) + i) % 3 === 0; c.fillStyle = on ? '#fff6c0' : '#7a4a10'; c.fillRect(56 + i * 16, 16, 3, 1); }
     if (this.joyT > 0) this.joyT--; if (this.btnT > 0) this.btnT--;
-    const jx = 150, jy = py + 15, tilt = this.joyT > 0 ? this.joy : 0;
+    const jx = 150, jy = py + 16, tilt = this.joyT > 0 ? this.joy : 0;
     pdisk(c, jx, jy + 4, 9, '#0a0a10'); pdisk(c, jx, jy + 3, 7, '#2a2a34');
     c.fillStyle = '#c0c0c8'; c.fillRect(jx - 1, jy - 10 + (tilt ? 2 : 0), 2, 13);
     pdisk(c, jx, jy - 12 + tilt * 4, 6, '#c01010'); pdisk(c, jx - 2, jy - 14 + tilt * 4, 2, '#ff8a8a');
     const cols = ['#e02020', '#ffd020', '#2a8aff', '#20c040', '#e02020', '#ffd020'];
     for (let i = 0; i < 6; i++) {
-      const bx = 228 + (i % 3) * 22 + (i >= 3 ? 6 : 0), by = py + 8 + (i >= 3 ? 11 : 0), dn = this.btnT > 0 && i === 0;
+      const bx = 228 + (i % 3) * 22 + (i >= 3 ? 6 : 0), by = py + 8 + (i >= 3 ? 10 : 0), dn = this.btnT > 0 && i === 0;
       pdisk(c, bx, by + 2, 7, '#0a0a10'); pdisk(c, bx, by + (dn ? 2 : 0), 6, cols[i]); if (!dn) pdisk(c, bx - 2, by - 2, 2, '#ffffff');
     }
     for (const [x, col] of [[318, '#ff6a3a'], [340, '#3aa8ff']]) { pdisk(c, x, py + 11, 4, (t >> 4) & 1 ? col : '#3a2a2a'); }
