@@ -10,8 +10,8 @@ function bolt(ctx, x1, y1, x2, y2, col, segs = 8, jit = 8, th = 1) {
     px = nx; py = ny;
   }
 }
-function snapCanvas(f) { const [cv, c] = mkCanvas(SPR_W, SPR_H); c.drawImage(f.R.cv, 0, 0); return cv; }
-const BIG_R = new Raster(96, 40);
+// снимок спрайта в полном (тонком) разрешении: SPR_W*RS × SPR_H*RS; рисовать с явным размером SPR_W×SPR_H
+function snapCanvas(f) { const [cv, c] = mkCanvas(f.R.w, f.R.h); c.drawImage(f.R.cv, 0, 0); return cv; }
 
 // ---------- общие помощники ----------
 const FZ = { z: 1.4 };                      // текущий зум камеры фаталити (читается через getter zoom)
@@ -93,7 +93,7 @@ function pop(s, x, y, str, o = {}) {
 function popCanvas(p) {
   const sp = textSprite(p.str, p.sz, p.tc, '#140c18', '#140c18');
   if (!p.bc) return sp;
-  const w = sp.width + 8 + p.sz * 7, h = sp.height + 8 + p.sz * 6, R = new Raster(w, h), cx = w / 2, cy = h / 2, N = 14, pts = [], inner = [];
+  const w = sp.width + 8 + p.sz * 7, h = sp.height + 8 + p.sz * 6, R = new Raster(w, h, 1), cx = w / 2, cy = h / 2, N = 14, pts = [], inner = [];
   for (let i = 0; i < N * 2; i++) {
     const an = i / (N * 2) * Math.PI * 2, k = i % 2 === 0 ? rand(0.92, 1.05) : 0.7;
     pts.push([cx + Math.cos(an) * (w / 2 - 2) * k, cy + Math.sin(an) * (h / 2 - 2) * k]);
@@ -558,7 +558,7 @@ const FIN = {
       if (u === 140 && s.pcs) { const pcs = s.pcs; bake(c => this.drawPcs(c, 0, pcs)); s.pcs = null; }
     },
     drawPcs(ctx, cx, pcs) {
-      for (const P of pcs) { ctx.save(); ctx.translate(Math.round(P.x - cx), Math.round(P.y)); ctx.rotate(P.rot); ctx.scale(P.f, 1); ctx.drawImage(P.img, 0, P.sy, SPR_W, P.sh, -SPR_OX, -Math.round(P.sh / 2), SPR_W, P.sh); ctx.restore(); }
+      for (const P of pcs) { ctx.save(); ctx.translate(Math.round(P.x - cx), Math.round(P.y)); ctx.rotate(P.rot); ctx.scale(P.f, 1); ctx.drawImage(P.img, 0, P.sy * RS, SPR_W * RS, P.sh * RS, -SPR_OX, -Math.round(P.sh / 2), SPR_W, P.sh); ctx.restore(); }
     },
     front(ctx, cx, g, a, v, u, s) {
       if (s.cuts) {
@@ -687,8 +687,8 @@ const FIN = {
       if (u === 128) bakeF(v);
     },
     ghostOf(f) {
-      const [cv, c] = mkCanvas(SPR_W, SPR_H); c.drawImage(f.R.cv, 0, 0);
-      const im = c.getImageData(0, 0, SPR_W, SPR_H), dd = im.data;
+      const [cv, c] = mkCanvas(f.R.w, f.R.h); c.drawImage(f.R.cv, 0, 0);
+      const im = c.getImageData(0, 0, f.R.w, f.R.h), dd = im.data;
       for (let i = 0; i < dd.length; i += 4) { if (!dd[i + 3]) continue; const L = (dd[i] * 3 + dd[i + 1] * 4 + dd[i + 2]) / 8 / 255; dd[i] = lerp(150, 255, L); dd[i + 1] = lerp(210, 255, L); dd[i + 2] = 255; }
       c.putImageData(im, 0, 0); return cv;
     },
@@ -699,11 +699,11 @@ const FIN = {
         const k = ease((u - 16) / 54);
         for (let i = 6; i >= 1; i--) {
           const q = i / 6, x = lerp(gx, P.x + a.facing * 4, q * k + 0.02), y = lerp(gy, P.y + 62, q * k) + Math.sin(u * 0.4 + i) * 2;
-          ctx.globalAlpha = 0.12 + 0.22 * q; ctx.save(); ctx.translate(Math.round(x - cx), Math.round(y)); ctx.scale(fc * (1 - k * 0.45 * Math.sin(q * Math.PI)), 1 - 0.25 * q * k); ctx.drawImage(s.ghost, -SPR_OX, -SPR_OY); ctx.restore();
+          ctx.globalAlpha = 0.12 + 0.22 * q; ctx.save(); ctx.translate(Math.round(x - cx), Math.round(y)); ctx.scale(fc * (1 - k * 0.45 * Math.sin(q * Math.PI)), 1 - 0.25 * q * k); ctx.drawImage(s.ghost, -SPR_OX, -SPR_OY, SPR_W, SPR_H); ctx.restore();
         }
       } else {        // душа в кулаке, извивается и уменьшается
         const k = clamp((u - 80) / 26, 0, 1), sc = Math.max(0.01, (1 - k) * (0.85 + Math.sin(u * 0.8) * 0.12));
-        ctx.globalAlpha = 0.8; ctx.save(); ctx.translate(Math.round(P.x - cx + a.facing * 2), Math.round(P.y + 28 * sc)); ctx.scale(fc * sc, sc + Math.sin(u * 0.7) * 0.08 * sc); ctx.drawImage(s.ghost, -SPR_OX, -SPR_OY); ctx.restore();
+        ctx.globalAlpha = 0.8; ctx.save(); ctx.translate(Math.round(P.x - cx + a.facing * 2), Math.round(P.y + 28 * sc)); ctx.scale(fc * sc, sc + Math.sin(u * 0.7) * 0.08 * sc); ctx.drawImage(s.ghost, -SPR_OX, -SPR_OY, SPR_W, SPR_H); ctx.restore();
       }
       ctx.globalAlpha = 1;
     }
@@ -758,7 +758,7 @@ const FIN = {
       if (s.size > 0.02) {
         const hh = this.hinge(a), o = renderJaw(Math.max(0.06, s.open)), sc = 0.3 + 1.05 * s.size;
         ctx.save(); ctx.translate(Math.round(hh.x - cx), Math.round(hh.y)); ctx.scale(a.facing * sc, sc); ctx.rotate(-0.42 * Math.min(1, s.size * 1.4));
-        ctx.drawImage(JAW_R.cv, -o.hx, -o.hy); ctx.restore();
+        ctx.drawImage(JAW_R.cv, -o.hx, -o.hy, JAW_R.lw, JAW_R.lh); ctx.restore();
         if (!v.hidden) drawF(ctx, cx, v);   // жертва видна внутри пасти
       }
       if (s.bone) drawBone(ctx, s.bone.x - cx, s.bone.y, s.bone.an);
@@ -947,7 +947,7 @@ const FIN = {
       if (u < 64 && s.w) this.swirl(ctx, cx, s, u, true);
       const S = s.sky;
       if (S && s.img) {
-        if (!S.tw || S.tw > 14) { ctx.save(); ctx.translate(Math.round(S.x - cx), Math.round(S.y)); ctx.rotate(u * 0.5); ctx.scale(S.k, S.k); ctx.drawImage(s.img, -SPR_OX, -SPR_OY + 40); ctx.restore(); }
+        if (!S.tw || S.tw > 14) { ctx.save(); ctx.translate(Math.round(S.x - cx), Math.round(S.y)); ctx.rotate(u * 0.5); ctx.scale(S.k, S.k); ctx.drawImage(s.img, -SPR_OX, -SPR_OY + 40, SPR_W, SPR_H); ctx.restore(); }
         if (S.tw && S.tw < 22) { const r = S.tw < 11 ? S.tw : 22 - S.tw; star(ctx, S.x - cx, S.y, Math.max(1, Math.round(r * 0.8)), '#ffffff', '#fff6a0'); if (r > 4) star(ctx, S.x - cx, S.y, Math.round(r * 0.4), '#ffe14a'); }
       }
     }

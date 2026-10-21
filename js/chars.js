@@ -57,6 +57,7 @@ const CHARS = [
     desc: 'Изгнанный ниндзя клана Пламени. Его ярость горит жарче вулкана.',
     pal: { skin: '#d9a06f', main: '#e8a628', sleeve: '#e8a628', fore: '#2a2433', glove: '#2a2433', pants: '#e8a628', boots: '#2a2433', belt: '#1e1a24', beltKnot: true, hood: '#e8a628', mask: '#1e1a24', eye: '#fff6c8', fx: '#ff6a1a' },
     build: BUILD({}),
+    stance: { hF: [11, 4], hB: [8, 7] },
     draw: {
       tex: { sleeve: foldTex(5, 3, 10), pants: foldTex(5, 4, 13), fore: wrapTex(3, 1, 11), boots: wrapTex(3, 0, 8) },
       midBack(R, J, P) { // свёрнутая верёвка с кунаем на бедре
@@ -80,7 +81,7 @@ const CHARS = [
       },
       head(H, P, c) { headNinja(H, P, c, { band: P.mask, glow: '#ff8a2a' }); }
     },
-    proj: 'fire', dash: 'teleport', fatal: { seq: ['B', 'F', 'F'], btn: 'p', type: 'burn', name: 'Пепел к пеплу' },
+    proj: 'fire', dash: 'teleport', fatal: { seq: ['B', 'F', 'F', 'D'], type: 'burn', name: 'Пепел к пеплу' },
     win: 'fist', quote: 'Твоя душа сгорит дотла!'
   },
   {
@@ -88,6 +89,7 @@ const CHARS = [
     desc: 'Хранительница вечной мерзлоты. Замораживает врагов одним взглядом.',
     pal: { skin: '#f1c7a6', main: '#2f7fd0', sleeve: '#2f7fd0', fore: '#d6efff', glove: '#d6efff', pants: '#2f7fd0', boots: '#d6efff', belt: '#d6efff', beltKnot: true, hood: '#2f7fd0', mask: '#d6efff', eye: '#ffffff', pupil: '#2a6fd0', hair: '#231d3d', fx: '#7fdcff' },
     build: BUILD({ chest: 6, waist: 4.7, limb: 0.92 }),
+    stance: { hF: [10, 5], hB: [7, 8] },
     draw: {
       tex: { sleeve: foldTex(5, 3, 10), pants: foldTex(6, 4, 13), fore: wrapTex(3, 2, 10), boots: wrapTex(3, 1, 7) },
       torso(R, J, P) {
@@ -112,7 +114,7 @@ const CHARS = [
       },
       head(H, P, c) { headNinja(H, P, c, { pony: true, pupil: P.pupil, lash: true }); }
     },
-    proj: 'ice', dash: 'slide', fatal: { seq: ['F', 'D', 'F'], btn: 'k', type: 'shatter', name: 'Ледяная скульптура' },
+    proj: 'ice', dash: 'slide', fatal: { seq: ['F', 'D', 'F', 'U'], type: 'shatter', name: 'Ледяная скульптура' },
     win: 'bow', quote: 'Зима пришла за тобой.'
   },
   {
@@ -120,6 +122,7 @@ const CHARS = [
     desc: 'Ветеран звёздных войн в силовой броне. Плазма решает всё.',
     pal: { skin: '#c58c63', main: '#4f6b30', sleeve: '#4f6b30', fore: '#3a4c28', glove: '#7b848d', pants: '#3a4c28', boots: '#3b3f45', belt: '#2b2f35', armor: '#86ad50', metal: '#8e979f', visor: '#3fe0ff', fx: '#7dff6a' },
     build: BUILD({ chest: 8, waist: 6.4, limb: 1.16 }),
+    stance: { hF: [11, 5], hB: [8, 8] },
     bootTop: 0.3,
     draw: {
       tex: { boots: (s, v, ti) => (ti >= 1 && s > 1 && (s | 0) % 4 === 0) ? ti - 1 : ti },
@@ -180,7 +183,7 @@ const CHARS = [
         H.rect(C + 3, C + 2, 1, 2, C32('#2b2f35')); H.rect(C + 5, C + 2, 1, 2, C32('#2b2f35'));
       }
     },
-    proj: 'plasma', dash: 'jet', fatal: { seq: ['D', 'D', 'F'], btn: 'p', type: 'laser', name: 'Орбитальный удар' },
+    proj: 'plasma', dash: 'jet', fatal: { seq: ['D', 'D', 'F', 'U'], type: 'laser', name: 'Орбитальный удар' },
     win: 'salute', quote: 'Цель ликвидирована. Конец связи.'
   },
   {
@@ -189,7 +192,7 @@ const CHARS = [
     pal: { skin: '#d7a27b', main: '#262630', sleeve: '#262630', fore: '#d6dbe3', glove: '#3a3a46', pants: '#262630', boots: '#d6dbe3', belt: '#c0283a', armor: '#c0283a', metal: '#d6dbe3', eye: '#ff2a4a', gold: '#e3b341', fx: '#ff3a5a' },
     build: BUILD({ chest: 6.8 }),
     weapon: 'katana',
-    stance: { hF: [10, -6], hB: [9, -4], wa: -40 },
+    stance: { hF: [11, 3], hB: [9, 6], wa: -62 },
     draw: {
       tex: {
         main: (s, v, ti) => (ti >= 2 && (s | 0) % 3 === 0) ? ti - 1 : ti,
@@ -255,7 +258,7 @@ const CHARS = [
         sphere(H, C + 1, C - 6, 1.4, '#c0283a'); H.px(C + 1, C - 7, C32('#ffd0d8'));
       }
     },
-    proj: 'slash', dash: 'dashcut', fatal: { seq: ['F', 'F', 'B'], btn: 'k', type: 'slice', name: 'Идеальный разрез' },
+    proj: 'slash', dash: 'dashcut', fatal: { seq: ['F', 'F', 'B', 'D'], type: 'slice', name: 'Идеальный разрез' },
     win: 'sword', quote: 'Мой клинок не знает пощады.'
   },
   {
@@ -264,7 +267,7 @@ const CHARS = [
     pal: { skin: '#e6b089', main: '#8a2b2b', sleeve: '#e6b089', fore: '#e6b089', bracer: '#5a3c22', glove: '#e6b089', pants: '#5b4733', boots: '#4a3020', belt: '#3a2412', fur: '#8b6a44', beard: '#d0702a', metal: '#b9c0c8', horn: '#efe6cf', fx: '#9fd8ff' },
     build: BUILD({ chest: 8.6, waist: 7, limb: 1.2 }),
     weapon: 'axe',
-    stance: { hF: [9, -5], hB: [8, 0], wa: -50, torso: 14 },
+    stance: { hF: [10, 4], hB: [8, 7], wa: -70, torso: 14 },
     draw: {
       tex: {
         main: foldTex(6, 2, 14),
@@ -330,19 +333,20 @@ const CHARS = [
         H.rect(C + 5, C - 2, 1, 3, mt[2]); H.px(C + 5, C + 1, mt[0]);
       }
     },
-    proj: 'axe', dash: 'charge', fatal: { seq: ['D', 'F', 'D'], btn: 'p', type: 'hammer', name: 'Молот богов' },
+    proj: 'axe', dash: 'charge', fatal: { seq: ['D', 'F', 'D', 'U'], type: 'hammer', name: 'Молот богов' },
     win: 'roar', quote: 'Вальхалла ждёт, но не тебя!'
   },
   {
     id: 'morena', name: 'Морена', title: 'Некромантка', world: 'Королевство Мглы', g: 'f',
     desc: 'Повелительница мёртвых. Каждая победа — новая душа в коллекцию.',
     pal: { skin: '#d9d2ea', main: '#4b2a6e', sleeve: '#4b2a6e', fore: '#d9d2ea', glove: '#d9d2ea', pants: '#2f1a45', boots: '#2a1a33', belt: '#c9a227', robe: '#4b2a6e', trim: '#c9a227', hair: '#efeaff', eye: '#d07bff', fx: '#c06bff' },
-    build: BUILD({ chest: 6, waist: 4.8, limb: 0.92 }),
+    build: BUILD({ chest: 6.4, waist: 3.9, limb: 0.86, torso: 18, leg1: 15.5, leg2: 15.5 }),
+    stance: { hF: [9, 6], hB: [6, 9], torso: 6 },
     draw: {
       back(R, J, P, c) {
         const b = this.build, sw = Math.sin(c.t * 0.1) * 2, rb = ramp(P.robe, -0.4);
         const a = TP(J, -2, b.torso), e = TP(J, -5, b.torso - 3);
-        const h1 = { x: J.hip.x - 15 + sw, y: J.hip.y + 27 }, h2 = { x: J.hip.x - 8 + sw * 0.5, y: J.hip.y + 29 };
+        const h1 = { x: J.hip.x - 11 + sw, y: J.hip.y + 28 }, h2 = { x: J.hip.x - 5 + sw * 0.5, y: J.hip.y + 29 };
         plate(R, [[a.x, a.y], [e.x, e.y], [h1.x, h1.y], [h2.x, h2.y], [J.hip.x - 2, J.hip.y + 10]], rb);
         // складки плаща
         R.line(e.x - 1, e.y + 4, h1.x + 3, h1.y - 1, rb[0]); R.line(a.x - 3, a.y + 8, h2.x - 2, h2.y - 1, rb[1]);
@@ -362,10 +366,13 @@ const CHARS = [
         R.px(q.x, q.y - 1, w);
       },
       mid(R, J, P) {
-        const b = this.build, a = TP(J, -b.waist - 0.5, 3), e = TP(J, b.waist + 0.5, 3);
-        const kf = { x: J.knF.x + 3, y: J.knF.y + 3 }, kb = { x: J.knB.x - 3, y: J.knB.y + 3 };
+        // облегающее платье-плащ: тонкая талия, округлые бёдра, сужение к коленям
+        const b = this.build, a = TP(J, -b.waist - 0.3, 5), e = TP(J, b.waist + 0.3, 5), ha = TP(J, -b.waist - 2.1, 0), he = TP(J, b.waist + 1.9, 0);
+        const kf = { x: J.knF.x + 1.6, y: J.knF.y + 3 }, kb = { x: J.knB.x - 1.6, y: J.knB.y + 3 };
         const rr = ramp(P.robe);
-        plate(R, [[a.x, a.y], [e.x, e.y], [kf.x, kf.y], [kb.x, kb.y]], rr);
+        plate(R, [[a.x, a.y], [e.x, e.y], [he.x, he.y], [kf.x, kf.y], [kb.x, kb.y], [ha.x, ha.y]], rr);
+        // разрез у передней ноги
+        const sl = lp(he, kf, 0.45); R.fline(sl.x, sl.y, kf.x - 0.5, kf.y, rr[0]);
         // складки юбки
         for (let i = 1; i < 4; i++) { const p1 = lp(a, e, i / 4), p2 = lp(kb, kf, i / 4 + 0.05); R.line(p1.x, p1.y + 2, p2.x, p2.y - 1, rr[i & 1 ? 1 : 3]); }
         R.line(kb.x, kb.y, kf.x, kf.y, C32(P.trim)); R.line(kb.x, kb.y - 1, kf.x, kf.y - 1, ramp(P.trim)[0]);
@@ -404,14 +411,15 @@ const CHARS = [
         H.px(C + 4, C - 4, C32('#c06bff')); H.px(C + 3, C - 4, C32(P.trim)); H.px(C + 5, C - 4, C32(P.trim)); H.px(C + 4, C - 5, C32('#f4d0ff'));
       }
     },
-    proj: 'skull', dash: 'warp', fatal: { seq: ['B', 'B', 'D'], btn: 'k', type: 'souls', name: 'Жатва душ' },
+    proj: 'skull', dash: 'warp', fatal: { seq: ['B', 'B', 'D', 'F'], type: 'souls', name: 'Жатва душ' },
     win: 'levitate', quote: 'Твоя душа теперь принадлежит мне.'
   },
   {
-    id: 'tralalero', name: 'Тралалеро Тралала', title: 'Акула в кроссовках', world: 'Итальянский брейнрот', g: 'm', meme: true,
-    desc: 'Трёхногая акула в синих кроссах. Тралалеро тралала, порко дио!',
-    pal: { skin: '#6d8fae', main: '#6d8fae', sleeve: '#6d8fae', fore: '#6d8fae', glove: '#6d8fae', pants: '#6d8fae', shoes: '#2f6bff', sole: '#ffffff', stripe: '#ffffff', belly: '#eef2f4', fx: '#4fc3ff' },
+    id: 'tralalero', name: 'Тралалеро Тралала', title: 'Акула с плавниками', world: 'Итальянский брейнрот', g: 'm', meme: true,
+    desc: 'Акула на двух ногах с ластами-плавниками. Тралалеро тралала, порко дио!',
+    pal: { skin: '#6d8fae', main: '#6d8fae', sleeve: '#6d8fae', fore: '#6d8fae', glove: '#6d8fae', pants: '#6d8fae', shoes: '#5d7f9e', fin: '#4f6f8e', belly: '#eef2f4', fx: '#4fc3ff' },
     build: BUILD({ chest: 7.2, waist: 6.2, limb: 1.05, headR: 7, neck: 1 }),
+    stance: { hF: [11, 5], hB: [8, 8] },
     fin: true,
     draw: {
       back(R, J, P, c) {
@@ -424,17 +432,16 @@ const CHARS = [
         const f1 = TP(J, -b.chest + 2, b.torso - 3), f2 = TP(J, -b.chest - 8, b.torso + 5), f3 = TP(J, -b.chest + 1, b.torso - 11), fn = TP(J, -b.chest - 3.5, b.torso - 1);
         plate(R, [[f1.x, f1.y], [f2.x, f2.y], [fn.x, fn.y + 1.5], [f3.x, f3.y]], P.main, -0.12);
         R.line(f1.x - 1, f1.y, f2.x + 1, f2.y + 1, ramp(P.main)[3]);
-        // третья нога в кроссовке
-        const hm = { x: J.hip.x - 0.5, y: J.hip.y + 0.5 };
-        const tg = Math.abs(J.rot) > 0.3 ? lp(J.ftB, J.ftF, 0.45) : { x: J.ftB.x * 0.55 + J.ftF.x * 0.45, y: Math.max(J.ftB.y, J.ftF.y) };
-        const lg = ik(hm, tg, b.leg1, b.leg2, { x: 1, y: -0.15 });
-        drawLeg(R, { build: b, draw: this }, { hipM: hm, knM: lg.j, ftM: lg.end }, 'M', P, -0.45);
       },
       tex: { pants: (s, v, ti) => ti, fore: (s, v, ti) => ti },
-      leg(R, J, side, P, k, hp, kn, ft, toe) { // шнурки
-        if (k < -0.2) return;
-        const w = ramp('#ffffff', k), l = lp(ft, toe, 0.3);
-        R.rect(l.x, l.y - 2.5, 2, 1, w[2]);
+      leg(R, J, side, P, k, hp, kn, ft, toe) { // ласты-плавники вместо кроссовок
+        const dx = toe.x - ft.x, dy = toe.y - ft.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, nx = -uy, ny = ux;
+        const tip = { x: toe.x + ux * 4.5, y: toe.y + uy * 4.5 };
+        const a = [ft.x - nx * 0.5, ft.y - ny * 0.5], b = [tip.x - nx * 2.6 + ux, tip.y - ny * 2.6 + uy], m = [tip.x - ux * 1.2, tip.y - uy * 1.2], c = [tip.x + nx * 1.8 + ux * 1.5, tip.y + ny * 1.8 + uy * 1.5], e = [ft.x + nx * 1.6, ft.y + ny * 1.6];
+        plate(R, [a, b, m, c, e], P.fin, k);
+        const fr = ramp(P.fin, k);
+        for (let i = 0; i < 3; i++) { const t = (i + 1) / 4; R.fline(lp(ft, toe, 0.2).x, lp(ft, toe, 0.2).y, b[0] + (c[0] - b[0]) * t, b[1] + (c[1] - b[1]) * t, fr[1]); }
+        R.fline(b[0], b[1], m[0], m[1], fr[0]); R.fline(m[0], m[1], c[0], c[1], fr[0]);
       },
       torso(R, J, P) {
         const b = this.build;
@@ -462,7 +469,7 @@ const CHARS = [
         for (let i = 0; i < 3; i++) { H.line(C - 2 - i * 2, C - 1, C - 1 - i * 2, C + 2, mr[0]); H.px(C - 3 - i * 2, C - 1, mr[3]); }
       }
     },
-    proj: 'wave', dash: 'torpedo', fatal: { seq: ['F', 'B', 'F'], btn: 'k', type: 'bite', name: 'Акулья пасть' },
+    proj: 'wave', dash: 'torpedo', fatal: { seq: ['F', 'B', 'F', 'U'], type: 'bite', name: 'Акулья пасть' },
     win: 'dance', quote: 'Тралалеро тралала! Порко дио!'
   },
   {
@@ -470,6 +477,7 @@ const CHARS = [
     desc: 'Наполовину крокодил, наполовину бомбардировщик. Бомбит всё, что движется.',
     pal: { skin: '#4f8a3a', main: '#7d868f', sleeve: '#4f8a3a', fore: '#4f8a3a', glove: '#4f8a3a', pants: '#4f8a3a', shoes: '#2c4a22', belly: '#c9d78a', metal: '#7d868f', cap: '#6a4a2a', glass: '#7fd0ff', fx: '#ffb84a' },
     build: BUILD({ chest: 7.4, waist: 6, limb: 1.05, headR: 6 }),
+    stance: { hF: [11, 5], hB: [8, 8] },
     draw: {
       tex: { sleeve: scaleTex, fore: scaleTex, pants: scaleTex, shoes: (s, v, ti) => ti },
       back(R, J, P, c) {
@@ -540,7 +548,7 @@ const CHARS = [
         sphere(H, C - 2.5, C - 5, 1.9, '#5a4a3a'); H.disk(C - 2.5, C - 5, 1.1, C32(shade(P.glass, -0.2)));
       }
     },
-    proj: 'bomb', dash: 'dive', fatal: { seq: ['D', 'B', 'F'], btn: 'p', type: 'bombs', name: 'Ковровая бомбардировка' },
+    proj: 'bomb', dash: 'dive', fatal: { seq: ['D', 'B', 'F', 'D'], type: 'bombs', name: 'Ковровая бомбардировка' },
     win: 'fly', quote: 'Бомбардиро Крокодило летит за тобой!'
   },
   {
@@ -549,7 +557,7 @@ const CHARS = [
     pal: { skin: '#c48c52', main: '#c48c52', bark: '#8a5a30', ring: '#e9c38c', sleeve: '#c48c52', fore: '#c48c52', glove: '#c48c52', pants: '#c48c52', shoes: '#7a4a24', fx: '#ffd36a' },
     build: BUILD({ leg1: 13, leg2: 13, torso: 21, chest: 8.4, waist: 8.2, limb: 0.72, arm1: 10, arm2: 10, shDrop: 5 }),
     headless: true, weapon: 'bat',
-    stance: { hF: [10, -7], hB: [8, -2], wa: -35, torso: 4 },
+    stance: { hF: [10, 3], hB: [8, 6], wa: -60, torso: 4 },
     draw: {
       tex: { sleeve: grainTex(0.8, 0.3), fore: grainTex(0.8, 0.3), pants: grainTex(0.8, 0.3) },
       torso(R, J, P, c) {
@@ -580,7 +588,7 @@ const CHARS = [
         R.blitRot(H, C + 3, C + 1, fp.x, fp.y, J.ta);
       }
     },
-    proj: 'tun', dash: 'leap', fatal: { seq: ['F', 'F', 'F'], btn: 'p', type: 'bat', name: 'Тун-Тун-Тун!' },
+    proj: 'tun', dash: 'leap', fatal: { seq: ['F', 'F', 'F', 'U'], type: 'bat', name: 'Тун-Тун-Тун!' },
     win: 'drum', quote: 'Тун! Тун! Тун! Сахуууур!'
   },
   {
@@ -588,7 +596,7 @@ const CHARS = [
     desc: 'Изящная балерина с головой-капучино. Её пируэты бодрят сильнее эспрессо.',
     pal: { skin: '#f2c7a5', main: '#f08cb8', sleeve: '#f2c7a5', fore: '#f2c7a5', glove: '#f2c7a5', pants: '#f9dbe6', shoes: '#f08cb8', tutu: '#ffc2db', cup: '#f6f3ee', coffee: '#7a4a2a', foam: '#e7cfa6', fx: '#c98a5a' },
     build: BUILD({ chest: 5.6, waist: 4.3, limb: 0.85, leg1: 16, leg2: 16, torso: 17, headR: 7, neck: 3 }),
-    stance: { hF: [6, -14], hB: [-2, -15], torso: 2, fF: [6, -1], fB: [-6, 0], eF: { x: -0.2, y: -1 }, eB: { x: 0.2, y: -1 } },
+    stance: { hF: [7, 11], hB: [4, 12], torso: 2, fF: [6, -1], fB: [-6, 0], eF: { x: -1, y: 0.3 }, eB: { x: -1, y: 0.3 } },
     draw: {
       tex: { main: (s, v, ti) => (ti >= 2 && s > 11 && ((s + v * 3) | 0) % 3 === 0) ? 3 : ti },
       torso(R, J, P) {
@@ -641,7 +649,7 @@ const CHARS = [
         sphere(H, C - 1, C - 9, 2.3, '#5a3a24'); H.px(C - 2, C - 10, C32('#8a6a4a')); H.px(C + 1, C - 9, C32('#f08cb8'));
       }
     },
-    proj: 'coffee', dash: 'pirouette', fatal: { seq: ['B', 'F', 'D'], btn: 'k', type: 'tornado', name: 'Смертельное фуэте' },
+    proj: 'coffee', dash: 'pirouette', fatal: { seq: ['B', 'F', 'D', 'U'], type: 'tornado', name: 'Смертельное фуэте' },
     win: 'spin', quote: 'Капучино-пируэт! Аривидерчи!'
   }
 ];

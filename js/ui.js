@@ -14,15 +14,21 @@ function pxCanvas(str, s = 1, col = '#ffffff', maxW = 0, align = 'left') {
 const _portraits = {};
 function portrait(ch, size = 32) {
   const key = ch.id + size;
+  if (!_portraits[key] && typeof renderPortrait === 'function') {
+    const src = renderPortrait(ch, 96), [cv, c] = mkCanvas(size * 2, size * 2);
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(src, 0, 0, size * 2, size * 2);
+    _portraits[key] = cv;
+  }
   if (!_portraits[key]) {
     const R = new Raster(SPR_W, SPR_H);
     renderFighter(R, ch, stanceOf(ch), { anim: 0 });
     const [cv, c] = mkCanvas(size, size);
     const top = ch.headless ? SPR_OY - 72 : SPR_OY - 72;
-    c.drawImage(R.cv, SPR_OX - size / 2 + 2, top, size, size, 0, 0, size, size);
+    const k = R.cv.width / SPR_W;
+    c.drawImage(R.cv, (SPR_OX - size / 2 + 2) * k, top * k, size * k, size * k, 0, 0, size, size);
     _portraits[key] = cv;
   }
-  const [cv, c] = mkCanvas(size, size); c.drawImage(_portraits[key], 0, 0);
+  const src = _portraits[key], [cv, c] = mkCanvas(src.width, src.height); c.drawImage(src, 0, 0);
   cv.style.width = (size / 10) + 'em'; cv.style.height = (size / 10) + 'em'; cv.className = 'px';
   return cv;
 }
@@ -33,8 +39,8 @@ const UI = {
   cur: null, prev: null, focus: 0, items: [], S: {},
   init() {
     this.root = document.getElementById('ui');
-    for (const k of ['menu', 'modes', 'select', 'tower', 'moves', 'controls', 'settings', 'pause', 'result', 'ending']) { const e = el('div', 'scr', this.root); e.id = 's-' + k; this.S[k] = { el: e }; }
-    this.buildMenu(); this.buildModes(); this.buildSelect(); this.buildMoves(); this.buildControls(); this.buildSettings(); this.buildPause();
+    for (const k of ['menu', 'modes', 'select', 'arena', 'tower', 'moves', 'controls', 'settings', 'pause', 'result', 'ending']) { const e = el('div', 'scr', this.root); e.id = 's-' + k; this.S[k] = { el: e }; }
+    this.buildMenu(); this.buildModes(); this.buildSelect(); this.buildArena(); this.buildMoves(); this.buildControls(); this.buildSettings(); this.buildPause();
     this.buildTouch();
     document.getElementById('game').addEventListener('pointerdown', () => { if (Game.phase === 'victory' && !Game.demo && Game.pt > 120 && !this.cur) Game.endMatch(); });
   },
@@ -46,7 +52,7 @@ const UI = {
     const sc = this.S[name];
     if (sc.onShow) sc.onShow(arg);
     this.refreshItems(); this.setFocus(sc.defFocus || 0);
-    document.getElementById('touch').classList.remove('on');
+    document.getElementById('touch').classList.remove('on'); if (this.hudEl) this.hudEl.classList.remove('on');
   },
   hide() { for (const k in this.S) this.S[k].el.classList.remove('on'); this.cur = null; this.updTouch(); },
   refreshItems() { this.items = [...this.S[this.cur].el.querySelectorAll('.btn')].filter(b => !b.classList.contains('dis') && b.offsetParent !== null); },
@@ -143,7 +149,7 @@ const UI = {
     const p1 = CHARS[Store.get('last1', 0)] || CHARS[0], p2 = CHARS[Store.get('last2', 6)] || CHARS[6];
     const fighter = (c, ch, x, gy, flip, pose, opt) => {
       renderFighter(R, ch, pose, Object.assign({ anim: t }, opt || {}));
-      c.save(); c.translate(x, gy); if (flip) c.scale(-1, 1); c.drawImage(R.cv, -SPR_OX, -SPR_OY); c.restore();
+      c.save(); c.translate(x, gy); if (flip) c.scale(-1, 1); c.drawImage(R.cv, -SPR_OX, -SPR_OY, SPR_W, SPR_H); c.restore();
     };
     for (const card of S.cards) {
       const c = card._cv.getContext('2d'), W2 = 128, H2 = 96, foc = card.classList.contains('foc');
@@ -195,17 +201,23 @@ const UI = {
     S.prev = [];
     S.side.forEach((sd, i) => {
       const tag = el('div', 'ptag', sd); S['tag' + i] = tag;
-      const [cv] = mkCanvas(100, 100); cv.className = 'px prev'; sd.appendChild(cv); S.prev.push(cv);
+      const [cv] = mkCanvas(160, 160); cv.className = 'px prev'; sd.appendChild(cv); S.prev.push(cv);
       S['info' + i] = el('div', 'info', sd);
     });
     const grid = el('div', 'grid', e); S.cells = [];
-    const lab1 = el('div', 'glab', grid); lab1.appendChild(pxCanvas('ГЕРОИ РАЗНЫХ МИРОВ', 1, '#ffd0a0'));
-    const r1 = el('div', 'grow', grid);
-    const lab2 = el('div', 'glab', grid); lab2.appendChild(pxCanvas('ИТАЛЬЯНСКИЙ БРЕЙНРОТ', 1, '#a0e0ff'));
-    const r2 = el('div', 'grow', grid);
+    // ряды: герои по 5 в ряд, затем брейнрот-мемы и «случайный»
+    const heroes = CHARS.map((c, i) => i).filter(i => !CHARS[i].meme), memes = CHARS.map((c, i) => i).filter(i => CHARS[i].meme);
+    S.rows = []; for (let i = 0; i < heroes.length; i += 5) S.rows.push(heroes.slice(i, i + 5));
+    S.rows.push(memes.concat([CHARS.length]));
+    const rowEl = {};
+    S.rows.forEach((row, ri) => {
+      if (ri === 0) el('div', 'glab', grid).appendChild(pxCanvas('ГЕРОИ РАЗНЫХ МИРОВ', 1, '#ffd0a0'));
+      if (ri === S.rows.length - 1) el('div', 'glab', grid).appendChild(pxCanvas('ИТАЛЬЯНСКИЙ БРЕЙНРОТ', 1, '#a0e0ff'));
+      const r = el('div', 'grow', grid); for (const i of row) rowEl[i] = r;
+    });
     const list = CHARS.concat([null]);
     list.forEach((ch, i) => {
-      const c = el('div', 'cell', i < 6 ? r1 : r2);
+      const c = el('div', 'cell', rowEl[i]);
       if (ch) c.appendChild(portrait(ch, 30)); else c.appendChild(pxCanvas('?', 3, ['#ffffff', '#ffd040']));
       c.onclick = () => { Sound.init(); this.selClick(i); };
       S.cells.push(c);
@@ -213,13 +225,13 @@ const UI = {
     S.hint = el('div', 'hint', e);
     const bb = el('div', 'backbtn', e); this.btn(bb, 'НАЗАД', () => this.selBack());
     S.R = new Raster(SPR_W, SPR_H);
-    S.handle = (q, raw) => { this.selInput(raw); for (const m of q) if (m === 'back') this.selBack(); return true; };
+    S.handle = (q, raw) => { if (S.going) return true; this.selInput(raw); for (const m of q) if (m === 'back') this.selBack(); return true; };
     S.tick = () => this.selTick();
   },
   startSelect(mode) {
     this.mode = mode;
     const S = this.S.select;
-    S.cur = [Store.get('last1', 0), Store.get('last2', 6)]; S.lock = [false, false]; S.step = 0; S.t = 0; S.rnd = [null, null];
+    S.cur = [Store.get('last1', 0), Store.get('last2', 6)].map(i => i <= CHARS.length ? i : 0); S.lock = [false, false]; S.step = 0; S.t = 0; S.rnd = [null, null]; S.going = false;
     S.title.innerHTML = ''; S.title.appendChild(pxCanvas(mode === 'tower' ? 'БАШНЯ: ВЫБЕРИ БОЙЦА' : mode === '2p' ? 'ДВА ИГРОКА' : 'БОЙ С БОТОМ', 3, ['#fff6c0', '#ffb030']));
     S.hint.innerHTML = '';
     const K1 = KEYS[0], K2 = KEYS[1], dirs = K => keyName(K.u) + keyName(K.l) + keyName(K.d) + keyName(K.r);
@@ -232,25 +244,46 @@ const UI = {
   selActive() { const S = this.S.select; return this.mode === '2p' ? null : S.step; },
   selMove(p, dx, dy) {
     const S = this.S.select; if (S.lock[p]) return;
-    let i = S.cur[p], row = i < 6 ? 0 : 1, col = row ? i - 6 : i;
-    if (dy) { row = clamp(row + dy, 0, 1); col = Math.min(col, row ? 4 : 5); }
-    if (dx) { const n = row ? 5 : 6; col = (col + dx + n) % n; }
-    S.cur[p] = row ? 6 + col : col; Sound.play('move'); this.selRefresh();
+    const rows = S.rows; let row = rows.findIndex(r => r.includes(S.cur[p])); if (row < 0) row = 0;
+    let col = rows[row].indexOf(S.cur[p]); if (col < 0) col = 0;
+    if (dy) { row = clamp(row + dy, 0, rows.length - 1); col = Math.min(col, rows[row].length - 1); }
+    if (dx) { const n = rows[row].length; col = (col + dx + n) % n; }
+    S.cur[p] = rows[row][col]; Sound.play('move'); this.selRefresh();
   },
   selConfirm(p) {
     const S = this.S.select; if (S.lock[p]) return;
     let i = S.cur[p];
-    if (i === 10) { i = randi(0, 9); S.rnd[p] = i; } else S.rnd[p] = null;
-    S.lock[p] = true; S.pick = S.pick || []; S.pick[p] = CHARS[i];
-    Sound.play('select'); Sound.say(CHARS[i].name + '!', 'name');
+    if (i === CHARS.length) { i = randi(0, CHARS.length - 1); S.rnd[p] = i; } else S.rnd[p] = null;
+    S.lock[p] = true; S.pick = S.pick || []; S.pick[p] = CHARS[i]; (S.lockT = S.lockT || [])[p] = S.t;
+    Sound.play('select');
     Store.set(p ? 'last2' : 'last1', S.cur[p]);
-    if (this.mode === 'tower') { this.startTower(CHARS[i]); return; }
-    if (this.mode === 'cpu' && p === 0) { S.step = 1; if (S.cur[1] === S.cur[0]) S.cur[1] = (S.cur[0] + 1) % 10; }
+    const both = this.mode === 'tower' || (S.lock[0] && S.lock[1]);
+    if (both) S.going = true;
+    // имя звучит полностью; следующий экран — только после того, как диктор договорит
+    this.sayQ(CHARS[i].name + '!', 'name', both ? () => {
+      if (this.cur !== 'select') return;
+      if (this.mode === 'tower') this.startTower(S.pick[0]);
+      else this.showArena({ mode: this.mode, p1: S.pick[0], p2: S.pick[1], ai2: this.mode === 'cpu' ? Settings.diff : null });
+    } : null);
+    if (this.mode === 'cpu' && p === 0) { S.step = 1; if (S.cur[1] === S.cur[0]) S.cur[1] = (S.cur[0] + 1) % CHARS.length; }
     this.selRefresh();
-    if (S.lock[0] && S.lock[1]) setTimeout(() => this.launch({ mode: this.mode, p1: S.pick[0], p2: S.pick[1], ai2: this.mode === 'cpu' ? Settings.diff : null }), 500);
+  },
+  // очередь фраз диктора: следующая начинается, когда закончилась предыдущая
+  sayQ(text, sting, cb) {
+    const run = () => {
+      this.vBusy = true;
+      let done = false;
+      const fin = () => { if (done) return; done = true; this.vBusy = false; if (cb) cb(); const n = this.vq.shift(); if (n) n(); };
+      const est = Sound.sayDur ? Sound.sayDur(text) : 700 + text.length * 70;
+      setTimeout(fin, est + 2500);
+      Sound.say(text, sting, () => setTimeout(fin, 250));
+      if (!Settings.voice) setTimeout(fin, 400);
+    };
+    this.vq = this.vq || [];
+    if (this.vBusy) this.vq.push(run); else run();
   },
   selBack() {
-    const S = this.S.select;
+    const S = this.S.select; if (S.going) return;
     if (this.mode === 'cpu' && S.step === 1 && !S.lock[1]) { S.step = 0; S.lock[0] = false; this.selRefresh(); return; }
     if (S.lock[1] && this.mode === '2p') { S.lock[1] = false; this.selRefresh(); return; }
     if (S.lock[0] && this.mode === '2p') { S.lock[0] = false; this.selRefresh(); return; }
@@ -309,6 +342,7 @@ const UI = {
   // квадратная аватарка: фон в цветах бойца, лучи, рамка
   drawAvatar(c, ch, S, p, rnd) {
     const t = S.t, N = 100, col = rnd ? '#8a8a9a' : ch.pal.fx || '#ffb030', lock = S.lock[p];
+    c.setTransform(c.canvas.width / N, 0, 0, c.canvas.width / N, 0, 0);
     c.imageSmoothingEnabled = false;
     ditherV(c, 0, 0, N, N, ['#08040c', mix('#08040c', col, 0.25), mix('#140810', col, 0.55)]);
     c.save(); c.globalAlpha = lock ? 0.35 : 0.16; c.fillStyle = mix(col, '#ffffff', 0.4);
@@ -316,10 +350,22 @@ const UI = {
     c.restore();
     c.globalAlpha = 0.5; pdisk(c, 50, 58, 30 + Math.sin(t * 0.08) * 2, mix(col, '#000000', 0.35)); c.globalAlpha = 0.35; pdisk(c, 50, 58, 22, mix(col, '#ffffff', 0.2)); c.globalAlpha = 1;
     c.globalAlpha = 0.45; c.fillStyle = '#000'; c.fillRect(32, 93, 36, 3); c.fillRect(36, 92, 28, 5); c.globalAlpha = 1;
-    const pose = lock ? ANIM.victory(ch, t) : ANIM.idle(ch, t);
-    renderFighter(S.R, ch, pose, { anim: t, tint: rnd ? 'shadow' : null, tintK: 0.85 });
-    c.save(); if (p === 1) { c.translate(N, 0); c.scale(-1, 1); }
-    c.drawImage(S.R.cv, SPR_OX - 50, SPR_OY - 92, N, 96, 0, 0, N, 96); c.restore();
+    if (typeof renderPortrait === 'function') {
+      // детальный пиксельный портрет лица; лёгкое «дыхание» и вспышка при выборе
+      const P = renderPortrait(ch, 160), K = c.canvas.width / N, bob = Math.round(Math.sin(t * 0.06) * 1.5);
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+      if (p === 1) { c.translate(c.canvas.width, 0); c.scale(-1, 1); }
+      if (rnd) { c.globalAlpha = 0.9; c.filter = 'brightness(0) opacity(.85)'; }
+      c.drawImage(P, Math.round((c.canvas.width - 160) / 2), c.canvas.height - 160 + 4 * K + bob);
+      c.filter = 'none'; c.restore();
+    } else {
+      const pose = lock ? ANIM.victory(ch, t) : ANIM.idle(ch, t);
+      renderFighter(S.R, ch, pose, { anim: t, tint: rnd ? 'shadow' : null, tintK: 0.85 });
+      const k = S.R.cv.width / SPR_W;
+      c.save(); if (p === 1) { c.translate(N, 0); c.scale(-1, 1); }
+      c.drawImage(S.R.cv, (SPR_OX - 50) * k, (SPR_OY - 92) * k, N * k, 96 * k, 0, 0, N, 96); c.restore();
+    }
+    if (lock && S.lockT && S.lockT[p] != null && t - S.lockT[p] < 12) { c.globalAlpha = (12 - (t - S.lockT[p])) / 12 * 0.7; c.fillStyle = '#ffffff'; c.fillRect(0, 0, N, N); c.globalAlpha = 1; }
     if (rnd) drawText(c, '?', 50, 46, 5, ['#ffffff', '#ffd040']);
     // рамка с заклёпками
     c.fillStyle = '#000'; c.fillRect(0, 0, N, 3); c.fillRect(0, N - 3, N, 3); c.fillRect(0, 0, 3, N); c.fillRect(N - 3, 0, 3, N);
@@ -328,6 +374,88 @@ const UI = {
     c.fillStyle = p ? '#3aa8ff' : '#ff6a3a'; c.fillRect(3, 3, N - 6, 1); c.fillRect(3, N - 4, N - 6, 1);
     for (const [x, y] of [[4, 4], [N - 6, 4], [4, N - 6], [N - 6, N - 6]]) { c.fillStyle = gold; c.fillRect(x, y, 2, 2); c.fillStyle = '#fff6c0'; c.fillRect(x, y, 1, 1); }
     c.globalAlpha = 0.08; c.fillStyle = '#fff'; for (let y = 4; y < N - 4; y += 2) c.fillRect(4, y, N - 8, 1); c.globalAlpha = 1;
+  },
+  // ---------- выбор арены ----------
+  buildArena() {
+    const S = this.S.arena, e = S.el;
+    el('div', 'sel-title', e).appendChild(pxCanvas('ВЫБЕРИ АРЕНУ', 3, ['#fff6c0', '#ffb030']));
+    const [pv] = mkCanvas(W, H); pv.className = 'px aprev'; e.appendChild(pv); S.pv = pv;
+    S.name = el('div', 'aname', e);
+    const grid = el('div', 'agrid', e); S.cells = [];
+    for (let i = 0; i <= STAGES.length; i++) {
+      const c = el('div', 'btn acell', grid);
+      const [cv] = mkCanvas(96, 54); cv.className = 'px'; c.appendChild(cv); c._cv = cv; c._i = i;
+      c.onclick = ev => { if (ev) ev.stopPropagation(); Sound.init(); if (S.sel === i) this.arenaGo(); else this.arenaSel(i); };
+      c.onpointerenter = () => { const k = this.items.indexOf(c); if (k >= 0 && k !== this.focus) { this.setFocus(k); this.arenaSel(i, true); } };
+      S.cells.push(c);
+    }
+    const bb = el('div', 'backbtn crow2', e);
+    this.btn(bb, 'НАЗАД', () => this.arenaBack());
+    this.btn(bb, 'В БОЙ!', () => this.arenaGo());
+    S.back = () => this.arenaBack();
+    S.handle = q => {
+      if (S.going) return true;
+      const n = S.cells.length, cols = 8;
+      for (const m of q) {
+        let i = S.sel;
+        if (m === 'left') i = (i + n - 1) % n; else if (m === 'right') i = (i + 1) % n;
+        else if (m === 'up') i = i - cols >= 0 ? i - cols : i; else if (m === 'down') i = Math.min(n - 1, i + cols);
+        else if (m === 'ok' || m === 'ok2') { this.arenaGo(); continue; }
+        else if (m === 'back' || m === 'pause') { Sound.play('back'); this.arenaBack(); continue; }
+        if (i !== S.sel) this.arenaSel(i);
+      }
+      return true;
+    };
+    S.tick = () => this.arenaTick();
+  },
+  // миниатюра арены: рисуем фон, не трогая текущую арену демо-боя
+  stageThumb(i, cv, t) {
+    const c = cv.getContext('2d'), s = STAGES[i], prev = Stage.cur;
+    if (!s.data) s.data = s.build();
+    if (!this._sbuf) this._sbuf = mkCanvas(W, H);
+    const [bc, bx] = this._sbuf, g = this._sg || (this._sg = { camX: (STAGE_W - W) / 2, stageState: {}, flashA: 0, frame: 0, f: [] });
+    g.frame = t;
+    Stage.cur = s; bx.clearRect(0, 0, W, H);
+    try { Stage.drawBg(bx, (STAGE_W - W) / 2, t, g); } catch (err) { }
+    Stage.cur = prev;
+    c.imageSmoothingEnabled = cv.width < W; c.imageSmoothingQuality = 'high';
+    c.drawImage(bc, 0, 0, cv.width, cv.height);
+  },
+  showArena(cfg) {
+    const S = this.S.arena; S.cfg = cfg; S.going = false; S.t = 0;
+    const last = Store.get('lastStage', STAGES.length); S.sel = last <= STAGES.length ? last : STAGES.length;
+    S.cells.forEach((c, i) => {
+      if (i < STAGES.length) this.stageThumb(i, c._cv, 0);
+      else { const x = c._cv.getContext('2d'); ditherV(x, 0, 0, 96, 54, ['#1a0c24', '#4a1a40', '#8a3a3a']); drawText(x, '?', 48, 27, 4, ['#ffffff', '#ffd040']); }
+    });
+    S.defFocus = S.sel;
+    this.show('arena');
+    this.arenaSel(S.sel, true);
+  },
+  arenaSel(i, silent) {
+    const S = this.S.arena; S.sel = i;
+    if (!silent) Sound.play('move');
+    S.cells.forEach((c, j) => c.classList.toggle('sel', j === i));
+    const k = this.items.indexOf(S.cells[i]); if (k >= 0) this.setFocus(k);
+    S.name.innerHTML = '';
+    S.name.appendChild(pxCanvas(i < STAGES.length ? STAGES[i].name.toUpperCase() : 'СЛУЧАЙНАЯ АРЕНА', 2, ['#fff6c0', '#ffb030'], 0, 'center'));
+  },
+  arenaTick() {
+    const S = this.S.arena; S.t++;
+    const i = S.sel;
+    if (i < STAGES.length) this.stageThumb(i, S.pv, S.t);
+    else if (S.t % 30 === 1) this.stageThumb(randi(0, STAGES.length - 1), S.pv, S.t);
+  },
+  arenaGo() {
+    const S = this.S.arena; if (S.going) return; S.going = true;
+    Store.set('lastStage', S.sel); Sound.play('select');
+    const stage = S.sel < STAGES.length ? S.sel : randi(0, STAGES.length - 1);
+    this.launch(Object.assign({}, S.cfg, { stage }));
+  },
+  arenaBack() {
+    if (this.S.arena.going) return;
+    const S = this.S.select; S.lock[1] = false; S.going = false; if (this.mode === 'cpu') S.step = 1;
+    this.show('select'); this.selRefresh();
   },
   // ---------- башня ----------
   startTower(ch) {
@@ -419,16 +547,17 @@ const UI = {
     const tabs = el('div', 'mtabs', e); S.tabs = [];
     CHARS.forEach((ch, i) => { const t = el('div', 'btn mtab', tabs); t.appendChild(portrait(ch, 30)); t.onclick = () => { Sound.play('move'); this.movesSel(i); }; t.onpointerenter = () => { const k = this.items.indexOf(t); if (k >= 0) this.setFocus(k); }; S.tabs.push(t); });
     S.body = el('div', 'mbody', e);
-    const mc = el('div', 'mcol', S.body); const [cv] = mkCanvas(90, 96); cv.className = 'px mprev'; mc.appendChild(cv); S.cv = cv; S.head = el('div', 'mhead', mc);
+    const mc = el('div', 'mcol', S.body); const [cv] = mkCanvas(180, 192); cv.className = 'px mprev'; mc.appendChild(cv); S.cv = cv; S.head = el('div', 'mhead', mc);
     S.list = el('div', 'mlist', S.body);
     const bb = el('div', 'backbtn', e); this.btn(bb, 'НАЗАД', () => this.backTo());
     S.R = new Raster(SPR_W, SPR_H); S.t = 0; S.sel = 0;
     S.back = () => this.backTo();
     S.onShow = ch => { this.movesSel(ch ? CHARS.indexOf(ch) : S.sel); };
+    S.cvScale = 1;
     S.defFocus = 0;
     S.handle = q => {
       for (const m of q) {
-        if (m === 'left' || m === 'up') this.movesSel((S.sel + 9) % 10); else if (m === 'right' || m === 'down') this.movesSel((S.sel + 1) % 10);
+        const n = CHARS.length; if (m === 'left' || m === 'up') this.movesSel((S.sel + n - 1) % n); else if (m === 'right' || m === 'down') this.movesSel((S.sel + 1) % n);
         else if (m === 'back' || m === 'ok' || m === 'ok2') { Sound.play('back'); this.backTo(); }
       }
       return true;
@@ -441,7 +570,7 @@ const UI = {
       else if (mv === 'proj') pose = k < 0.3 ? blendPose(stanceOf(ch), mkPose(stanceOf(ch), MOVE_POSES.proj.wind), k / 0.3) : k < 0.7 ? mkPose(POSES.thrust) : blendPose(mkPose(POSES.thrust), stanceOf(ch), (k - 0.7) / 0.3);
       else { const ph = k < 0.25 ? 0 : k < 0.45 ? 1 : 2; pose = movePose(ch, mv, ph === 0 ? k / 0.25 : ph === 2 ? (k - 0.45) / 0.55 : 0, ph); }
       renderFighter(S.R, ch, pose, { anim: S.t });
-      const c = S.cv.getContext('2d'); c.clearRect(0, 0, 90, 96); c.drawImage(S.R.cv, SPR_OX - 38, SPR_OY - 92, 90, 96, 0, 0, 90, 96);
+      const c = S.cv.getContext("2d"), rk = S.R.cv.width / SPR_W; c.imageSmoothingEnabled = false; c.clearRect(0, 0, S.cv.width, S.cv.height); c.drawImage(S.R.cv, (SPR_OX - 38) * rk, (SPR_OY - 92) * rk, 90 * rk, 96 * rk, 0, 0, S.cv.width, S.cv.height);
     };
   },
   movesSel(i) {
@@ -459,8 +588,8 @@ const UI = {
     row(PROJ[ch.proj].name, '← → + РУКА  (' + keyName(KEYS[0].sp1) + ')');
     row(DASH[ch.dash].name, '↓ → + НОГА  (' + keyName(KEYS[0].sp2) + ')');
     row(uniqueOf(ch).name + ' (КОРОННЫЙ)', '↓ ← + РУКА  (' + keyName(KEYS[0].sp3) + ')', '#ffd040');
-    sec('ФАТАЛИТИ (ВО ВРЕМЯ «ДОБЕЙ!», ВБЛИЗИ)');
-    row(ch.fatal.name, arr(ch.fatal.seq) + ' + ' + (ch.fatal.btn === 'p' ? 'РУКА' : 'НОГА') + '  (' + keyName(KEYS[0].fat) + ')', '#ff8a7a');
+    sec('ФАТАЛИТИ (ПРИ «ДОБЕЙ!», ТОЛЬКО СТРЕЛКИ)');
+    row(ch.fatal.name, arr(ch.fatal.seq) + '  (ИЛИ ' + keyName(KEYS[0].fat) + ')', '#ff8a7a');
     sec('БАЗОВЫЕ УДАРЫ');
     row('Удар рукой / серия', 'РУКА, РУКА');
     row('Удар ногой', 'НОГА');
@@ -580,10 +709,17 @@ const UI = {
     };
     mk('tp', 'Р', 'p'); mk('tk', 'Н', 'k'); mk('tbk', 'Б', 'b'); mk('ts1', 'СНАРЯД', 'sp1'); mk('ts2', 'РЫВОК', 'sp2'); mk('ts3', 'КОРОНА', 'sp3');
     this.fatBtn = mk('tfat', 'ФАТАЛИТИ', 'fat');
-    const ps = el('div', 'tpause', T); ps.appendChild(pxCanvas('II', 2, '#ffffff')); ps.addEventListener('pointerdown', e => { e.preventDefault(); if (Game.phase === 'victory') Game.endMatch(); else Game.pause(true); });
+    // кнопки в бою (для мыши и пальца): пауза и список приёмов своего бойца
+    const hb = el('div', 'hudbtns', document.getElementById('stage')); this.hudEl = hb;
+    const b1 = el('div', 'hbtn', hb); b1.appendChild(pxCanvas('II ПАУЗА', 1, '#ffffff'));
+    const b2 = el('div', 'hbtn', hb); b2.appendChild(pxCanvas('ПРИЁМЫ', 1, '#ffd040'));
+    b1.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Sound.init(); if (Game.phase === 'victory') Game.endMatch(); else Game.pause(true); });
+    b2.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Sound.init(); if (Game.phase === 'victory') return; Game.pause(true); if (Game.paused) this.show('moves', Game.f[0] && Game.f[0].ch); });
+    const ps = el('div', 'tpause', T); ps.style.display = 'none'; ps.appendChild(pxCanvas('II', 2, '#ffffff')); ps.addEventListener('pointerdown', e => { e.preventDefault(); if (Game.phase === 'victory') Game.endMatch(); else Game.pause(true); });
   },
   updTouch() {
-    const on = IS_TOUCH && Game.state !== 'demo' && Game.cfg && Game.cfg.mode !== 'demo' && !this.cur;
+    const live = Game.state !== 'demo' && Game.cfg && Game.cfg.mode !== 'demo' && !this.cur, on = IS_TOUCH && live;
     document.getElementById('touch').classList.toggle('on', !!on);
+    if (this.hudEl) this.hudEl.classList.toggle('on', !!live);
   }
 };

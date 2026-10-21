@@ -78,14 +78,19 @@ class PlayerInput {
     if (this.pad != null) { const ps = Input.padState(this.pad); if (ps) for (const k in h) h[k] |= ps[k]; }
     const pr = {}; for (const k in h) pr[k] = h[k] && !this.prev[k];
     this.prev = h;
-    for (const d of ['l', 'r', 'u', 'd']) if (pr[d]) this.buf.push({ d, f: frame });
+    let nd = null;
+    for (const d of ['l', 'r', 'u', 'd']) if (pr[d]) { this.buf.push({ d, f: frame }); nd = d; }
+    // отдельная длинная история стрелок для фаталити (пауза между нажатиями до 1.5 с)
+    if (nd) { const H = this.hist || (this.hist = []); if (H.length && frame - H[H.length - 1].f > 90) H.length = 0; H.push({ d: nd, f: frame }); if (H.length > 8) H.shift(); }
     while (this.buf.length && frame - this.buf[0].f > 50) this.buf.shift();
     const c = { l: h.l, r: h.r, u: h.u, d: h.d, b: h.b, p: pr.p, k: pr.k, special: null, seq: null };
     if (pr.sp1) c.special = 'proj'; else if (pr.sp2) c.special = 'dash'; else if (pr.sp3) c.special = 'unique'; else if (pr.fat) c.special = 'fatal';
+    const toS = e => e.d === 'u' ? 'U' : e.d === 'd' ? 'D' : ((e.d === 'r') === (facing === 1) ? 'F' : 'B');
+    if (nd) c.arrows = this.hist.map(toS);
     if (c.p || c.k) c.seq = this.buf.map(e => e.d === 'u' ? 'U' : e.d === 'd' ? 'D' : ((e.d === 'r') === (facing === 1) ? 'F' : 'B'));
     return c;
   }
-  clear() { this.buf = []; }
+  clear() { this.buf = []; this.hist = []; }
 }
 function seqMatch(seq, pat) {
   if (!seq || seq.length < pat.length) return false;

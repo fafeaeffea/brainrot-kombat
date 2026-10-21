@@ -16,9 +16,9 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .scr.on{display:block}
 #s-menu{background:none;transition:opacity .15s}
 #s-menu.fade{opacity:0}
-.cabscreen{position:absolute;left:21em;top:7.125em;width:48em;height:27em;font-size:.5333em;background:linear-gradient(90deg,rgba(0,0,0,.75),rgba(0,0,0,.4) 40%,rgba(0,0,0,0) 60%)}
-#s-menu .menu-col{left:3em;transform:none;top:10em;min-width:14em;gap:.25em}
-#s-menu .btn{padding:.1em 1em;border-width:.15em}
+.cabscreen{position:absolute;left:12.923em;top:4.308em;width:48em;height:27em;font-size:.65em;background:linear-gradient(90deg,rgba(0,0,0,.75),rgba(0,0,0,.4) 40%,rgba(0,0,0,0) 60%)}
+#s-menu .menu-col{left:3em;transform:none;top:9.6em;min-width:16em;gap:.45em}
+#s-menu .btn{padding:.35em 1.2em;border-width:.15em}
 #s-modes,#s-select,#s-tower,#s-moves,#s-controls,#s-settings,#s-ending{background:radial-gradient(ellipse at center,rgba(40,8,20,.82),rgba(5,2,8,.96))}
 #s-pause,#s-result{background:rgba(0,0,0,.55)}
 .logo{position:absolute;left:2em;top:.5em;display:flex;flex-direction:column;align-items:center;gap:.2em;filter:drop-shadow(0 0 .4em rgba(255,80,20,.6))}
@@ -43,9 +43,9 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .cell.p1.p2{border-color:#ff6a3a #3aa8ff #3aa8ff #ff6a3a}
 .cell.lk{background:#5a2a10}
 .glab{margin-top:.3em}
-.hint{position:absolute;top:16.4em;left:50%;transform:translateX(-50%);display:flex;justify-content:center}
+.hint{position:absolute;top:20.7em;left:50%;transform:translateX(-50%);display:flex;justify-content:center}
 .backbtn{position:absolute;left:.8em;bottom:.6em}
-#s-select .backbtn{left:50%;transform:translateX(-50%);bottom:1em}
+#s-select .backbtn{left:50%;transform:translateX(-50%);bottom:.5em}
 .backbtn .btn{padding:.2em .8em}
 .tower{position:absolute;left:50%;top:3.4em;transform:translateX(-50%);display:flex;flex-direction:column;gap:.25em}
 .trow{display:flex;align-items:center;gap:.6em;padding:0 .6em;height:2.5em;background:rgba(30,10,20,.8);border:.15em solid #3a2030;min-width:20em;position:relative}
@@ -54,8 +54,9 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .tme{position:absolute;right:-6.5em;display:flex;align-items:center;gap:.4em}
 .rbox{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:.6em;padding:1em 2em;background:rgba(10,4,10,.88);border:.25em solid #7a4a2a;box-shadow:0 0 2em #000}
 .rbox .menu-col{position:static;transform:none}
-.mtabs{position:absolute;left:.8em;top:3.6em;display:grid;grid-template-columns:repeat(2,3.6em);gap:.25em}
-.mtab{padding:.1em;width:3.2em;height:3.2em}
+.mtabs{position:absolute;left:.6em;top:3.6em;display:grid;grid-template-columns:repeat(3,2.65em);gap:.2em}
+.mtab{padding:.05em;width:2.5em;height:2.5em;border-width:.12em}
+.mtab canvas{width:2.2em!important;height:2.2em!important}
 .mtab.sel{border-color:#ffc040;background:#5a2a10}
 .mbody{position:absolute;left:9.2em;right:.8em;top:3.4em;bottom:.6em;display:flex;gap:.8em}
 .mcol{flex:none;width:11.5em;display:flex;flex-direction:column;gap:.4em}
@@ -96,6 +97,18 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .mart{width:12.8em!important;height:9.6em!important;border:.1em solid #000}
 .mcard.foc{transform:translateY(-.3em)}
 .mbtns{position:absolute;left:50%;bottom:.9em;transform:translateX(-50%);display:flex;gap:.6em}
+.hudbtns{position:absolute;left:50%;bottom:.5em;transform:translateX(-50%);display:none;gap:.4em;pointer-events:auto;z-index:5}
+.hudbtns.on{display:flex}
+.hbtn{padding:.25em .6em;background:rgba(10,4,12,.7);border:.12em solid rgba(255,208,64,.55);cursor:pointer}
+.hbtn:hover{background:rgba(90,30,20,.85)}
+.aprev{position:absolute;left:50%;top:3.6em;transform:translateX(-50%);width:24em!important;height:13.5em!important;border:.2em solid #c08a30;box-shadow:0 0 1em rgba(0,0,0,.8)}
+.aname{position:absolute;left:50%;top:15.6em;transform:translateX(-50%);display:flex;background:rgba(0,0,0,.6);padding:.2em .8em}
+.agrid{position:absolute;left:50%;top:18.1em;transform:translateX(-50%);display:grid;grid-template-columns:repeat(8,4.6em);gap:.3em}
+.acell{padding:0;width:4.6em;height:2.6em;border-width:.15em}
+.acell canvas{width:100%!important;height:100%!important}
+.acell.sel{border-color:#ffd040;box-shadow:0 0 .5em #ffd040}
+#s-arena{background:rgba(6,2,10,.82)}
+#s-arena .backbtn{bottom:.4em}
 </style>
 </head>
 <body>
@@ -114,6 +127,7 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 <script src="js/input.js"></script>
 <script src="js/fighter.js"></script>
 <script src="js/unique.js"></script>
+<script src="js/heroines.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/stages.js"></script>
 <script src="js/fatality.js"></script>

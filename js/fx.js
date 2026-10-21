@@ -55,9 +55,11 @@ const FX = {
   text(x, y, str, s, col, life = 50, vy = -0.6) { return this.p('text', x, y, 0, vy, life, col, s, 0, { str }); },
   // Разлёт спрайта бойца на пиксели
   burst(f, o = {}) {
-    const R = f.R, w = R.w, h = R.h, d = R.d, step = o.step || 1, out = [];
-    for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
-      const c = d[y * w + x]; if (!c) continue;
+    // растр спрайта хранится в тонких пикселях (R.s = RS): выборка с шагом step*RS, координаты — логические
+    const R = f.R, w = R.w, h = R.h, d = R.d, rs = R.s || 1, step = o.step || 1, fs = Math.max(1, Math.round(step * rs)), out = [];
+    for (let Y = 0; Y < h; Y += fs) for (let X = 0; X < w; X += fs) {
+      const c = d[Y * w + X]; if (!c) continue;
+      const x = X / rs, y = Y / rs;
       const wx = f.x + (f.facing === 1 ? x - SPR_OX : SPR_OX - x), wy = f.y + (y - SPR_OY) * (f.scaleY || 1);
       if (o.region && !o.region(x, y)) continue;
       let col = hexOf32(c);
@@ -141,6 +143,7 @@ class Proj {
     else if (T === 'wave' && this.t % 2 === 0) FX.p('px', x + rand(-6, 6), y - 6, rand(-0.6, 0.6), -rand(1, 2.5), 26, choice(['#ffffff', '#9fdfff', '#4fc3ff']), 1, 0.15, { floor: false });
     else if (T === 'coffee' && this.t % 2 === 0) FX.p('px', x, y, rand(-0.5, 0.5), rand(-0.5, 0.5), 30, choice(['#7a4a2a', '#c98a5a']), 1, 0.15, { floor: false });
     else if (T === 'bomb' && this.t % 3 === 0) FX.smoke(x - this.dir * 3, y - 4, 1, '#77707a');
+    else if (s.trail) s.trail(x, y, this.dir, this.t);
     if (s.explode && this.y >= GROUND - 4) { this.explode(g); return; }
     if (--this.life <= 0 || this.x < -40 || this.x > STAGE_W + 40) this.dead = true;
   }
@@ -175,7 +178,7 @@ class Proj {
         break;
       case 'axe': {
         WEP_R.clear(); WEAPONS.axe(WEP_R); _axeR.clear(); _axeR.blitRot(WEP_R, 26, 20, 28, 28, t * 0.45 * d); _axeR.outline(c32('#140c18')); _axeR.flush();
-        ctx.drawImage(_axeR.cv, x - 28, y - 28); break;
+        ctx.drawImage(_axeR.cv, x - 28, y - 28, _axeR.lw, _axeR.lh); break;
       }
       case 'skull': {
         const fl = (t >> 2) & 1;
@@ -212,6 +215,7 @@ class Proj {
         pdisk(ctx, x, y, 4.5, '#4a2a14'); pdisk(ctx, x, y, 3.5, '#7a4a2a'); pdisk(ctx, x - d, y - 1, 2, '#e7cfa6'); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - d * 2, y - 2, 1, 1);
         if (t % 6 < 3) { ctx.fillStyle = '#e8e8e8'; ctx.fillRect(x - 2, y - 8, 1, 2); ctx.fillRect(x + 1, y - 10, 1, 2); }
         break;
+      default: if (this.s.draw) this.s.draw(ctx, x, y, d, t);
     }
   }
 }

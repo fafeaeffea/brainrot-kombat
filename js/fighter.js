@@ -231,7 +231,7 @@ class Fighter {
     this.x = lerp(a.x + a.facing * 14, a.x - a.facing * 30, k);
     this.y = GROUND - Math.sin(Math.min(1, k) * Math.PI) * 34;
     if (k >= 1) {
-      const dmg = 12; this.hp = Math.max(0, this.hp - dmg); this.roundDmg += dmg; this.taken += dmg; this.flash = 4;
+      const dmg = 12; this.hp = Math.max(0, this.hp - dmg); this.roundDmg += dmg; this.taken += dmg; this.flash = 4; if (this.g.dmgPop) this.g.dmgPop(this, dmg, false);
       this.g.shake(6); Sound.play('heavy'); FX.blood(this.x, GROUND - 10, -a.facing, 12); FX.dust(this.x, GROUND, 12);
       this.setSt('fall'); this.vy = -2.5; this.vx = -a.facing * 1.4; this.y = GROUND - 2;
       a.combo = 1; this.g.afterHit(a, this, { dmg });
@@ -269,10 +269,12 @@ class Fighter {
     let blocking = (this.st === 'block' || this.st === 'cblock' || this.st === 'bstun') && !h.throw && !this.air && Math.sign(this.opp.x - this.x) === this.facing;
     if (blocking && h.overhead && (this.st === 'cblock' || (this.st === 'bstun' && this.lastBlockCrouch))) blocking = false;
     if (blocking && h.low && (this.st === 'block' || (this.st === 'bstun' && !this.lastBlockCrouch))) blocking = false;
-    if (blocking) {
+    // блок снижает урон на 30%; если блокируемый удар добивает — проходит как обычный
+    const bd = Math.max(1, Math.round(h.dmg * 0.7));
+    if (blocking && this.hp - bd > 0) {
       this.setSt('bstun'); this.stun = h.bs || 12; this.vx = dir * Math.max(1.5, (h.kb || 2) * 0.9);
-      const chip = h.chip ? Math.ceil(h.dmg * 0.15) : 0;
-      if (chip) { this.hp = Math.max(1, this.hp - chip); this.roundDmg += chip; this.taken += chip; }
+      this.hp -= bd; this.roundDmg += bd; this.taken += bd;
+      if (this.g.dmgPop) this.g.dmgPop(this, bd, true);
       return 'block';
     }
     let dmg = h.dmg;
@@ -280,7 +282,7 @@ class Fighter {
     if (airborne) { this.juggle++; dmg *= Math.pow(0.72, this.juggle); }
     dmg = Math.max(1, Math.round(dmg));
     this.hp = Math.max(0, this.hp - dmg); this.roundDmg += dmg; this.taken += dmg; this.flash = 4;
-    FX.text(this.x + rand(-6, 6), this.y - 74, '-' + dmg, dmg >= 10 ? 2 : 1, dmg >= 10 ? ['#ffffff', '#ff6a3a'] : ['#ffffff', '#ffd040'], 34, -0.9);
+    if (this.g.dmgPop) this.g.dmgPop(this, dmg, false);
     this.frozen = 0; this.tint = null; this.alpha = 1; this.visFlip = false; this.jet = false;
     if (h.freeze && this.hp > 0 && !airborne) { this.frozen = h.freeze; this.tint = 'ice'; this.setSt('frozen'); this.vx = 0; Sound.play('freeze'); return 'hit'; }
     if (h.launch || airborne) { this.setSt('fall'); this.vy = h.launch ? h.launch[0] : -3.6; this.vx = dir * (h.launch ? h.launch[1] : 2); this.y = Math.min(this.y, GROUND - 1); }
@@ -349,9 +351,9 @@ class Fighter {
     ctx.globalAlpha = this.alpha;
     if (this.scaleY !== 1) {
       ctx.save(); ctx.translate(dx, dy); ctx.scale(fc * (2 - this.scaleY * 0.6 - 0.4), this.scaleY);
-      ctx.drawImage(this.R.cv, -SPR_OX, -SPR_OY); ctx.restore();
-    } else if (fc === 1) ctx.drawImage(this.R.cv, dx - SPR_OX, dy - SPR_OY);
-    else { ctx.save(); ctx.translate(dx, 0); ctx.scale(-1, 1); ctx.drawImage(this.R.cv, -SPR_OX, dy - SPR_OY); ctx.restore(); }
+      ctx.drawImage(this.R.cv, -SPR_OX, -SPR_OY, SPR_W, SPR_H); ctx.restore();
+    } else if (fc === 1) ctx.drawImage(this.R.cv, dx - SPR_OX, dy - SPR_OY, SPR_W, SPR_H);
+    else { ctx.save(); ctx.translate(dx, 0); ctx.scale(-1, 1); ctx.drawImage(this.R.cv, -SPR_OX, dy - SPR_OY, SPR_W, SPR_H); ctx.restore(); }
     ctx.globalAlpha = 1;
   }
 }

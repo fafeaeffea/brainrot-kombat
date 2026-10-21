@@ -144,7 +144,7 @@ const Sound = {
   // ----- записанный диктор: фразы -> клипы snd/<key>.mp3 -----
   VOICE_DIR: 'snd/',
   VOICE_MAP: {
-    'кайро': 'n_kairo', 'юки': 'n_yuki', 'сержант вольт': 'n_volt', 'вольт': 'n_volt',
+    'кайро': 'n_kairo', 'киоми': 'n_kiomi', 'нефера': 'n_nefera', 'нова': 'n_nova', 'юки': 'n_yuki', 'сержант вольт': 'n_volt', 'вольт': 'n_volt',
     'ронин 9': 'n_ronin', 'ронин девять': 'n_ronin', 'бьорн': 'n_bjorn', 'морена': 'n_morena',
     'тралалеро тралала': 'n_tralalero', 'бомбардиро крокодило': 'n_bombardiro',
     'тун тун сахур': 'n_tung', 'балерина капучина': 'n_ballerina',
@@ -205,29 +205,38 @@ const Sound = {
     for (const k of keys) {
       const b = this.clips[k], src = c.createBufferSource();
       src.buffer = b; src.connect(g); src.start(t); this.voiceSrc.push(src);
-      t += Math.max(0.3, b.duration - 0.22); // в клипе хвост эха ~0.35с: следующий начинается с паузой ~0.13с
+      t += Math.max(0.4, b.duration - 0.05); // пауза между словами, чтобы диктор не торопился
     }
     const end = t + 0.15;
     setTimeout(() => { if (tok === this.voiceTok) this.duck(true); }, Math.max(0, (t0 - c.currentTime) * 1000));
     setTimeout(() => { if (tok === this.voiceTok) { this.duck(false); this.voiceSrc = []; } }, (end - c.currentTime) * 1000);
+    return end - c.currentTime;
   },
-  say(text, sting) {
+  // onDone вызывается один раз, когда фраза договорена (или сразу, если голос выключен)
+  sayDur(text) {
+    const keys = this.phraseClips(text);
+    if (keys && keys.every(k => this.clips[k])) return keys.reduce((a, k) => a + Math.max(0.4, this.clips[k].duration - 0.05), 0.3) * 1000;
+    return 600 + String(text).length * 85;
+  },
+  say(text, sting, onDone) {
+    let fired = false; const done = () => { if (!fired) { fired = true; if (onDone) onDone(); } };
+    if (onDone) setTimeout(done, this.sayDur(text) + 2500);
     if (sting) this.sting(sting === true ? 'name' : sting);
-    if (!Settings.voice || this.muteReasons.size) return;
+    if (!Settings.voice || this.muteReasons.size) { if (onDone) setTimeout(done, 300); return; }
     this.stopVoice();
     const keys = this.phraseClips(text);
     const ready = !!(keys && this.ctx && keys.every(k => this.clips[k]));
     this._lastClips = ready ? keys : null;
     this._lastSay = { text, keys, ready };
-    if (ready) { try { if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => { }); this.playClips(keys, sting ? 0.12 : 0.02); return; } catch (e) { } }
-    if (!window.speechSynthesis) return;
+    if (ready) { try { if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => { }); const d = this.playClips(keys, sting ? 0.12 : 0.02); if (onDone) setTimeout(done, d * 1000); return; } catch (e) { } }
+    if (!window.speechSynthesis) { if (onDone) setTimeout(done, this.sayDur(text)); return; }
     try {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ru-RU'; u.rate = 0.75; u.pitch = 0; u.volume = 1;
       const v = this.pickVoice(); if (v) u.voice = v;
       // музыка приглушается, пока говорит диктор
       u.onstart = () => this.duck(true);
-      u.onend = u.onerror = () => this.duck(false);
+      u.onend = u.onerror = () => { this.duck(false); done(); };
       setTimeout(() => { try { speechSynthesis.speak(u); } catch (e) { } }, sting ? 120 : 0);
     } catch (e) { }
   },
@@ -235,9 +244,22 @@ const Sound = {
   TRACKS: {
     menu: { bpm: 112, bass: [45, 0, 45, 0, 48, 0, 45, 0, 43, 0, 43, 0, 41, 0, 40, 0], lead: [69, 0, 72, 0, 76, 0, 74, 72, 67, 0, 71, 0, 72, 71, 69, 0], drum: 'k...s...k.k.s...' },
     fight: { bpm: 150, bass: [33, 33, 45, 33, 33, 45, 33, 45, 36, 36, 48, 36, 31, 31, 43, 31], lead: [69, 0, 0, 72, 0, 0, 76, 0, 74, 0, 72, 0, 71, 0, 67, 0], drum: 'k.h.s.h.k.k.s.hh' },
+    menu2: { bpm: 96, scale: 'minor', bass: [38, 0, 38, 50, 0, 38, 0, 41, 43, 0, 43, 55, 0, 41, 0, 40], lead: [62, 0, 65, 69, 0, 67, 65, 0, 64, 0, 62, 0, 60, 62, 0, 0], drum: 'k..hs..hk.k.s..h' },
+    menu3: { bpm: 124, bass: [40, 40, 52, 40, 43, 43, 55, 43, 45, 45, 57, 45, 47, 47, 59, 47], lead: [76, 0, 79, 0, 83, 0, 81, 79, 76, 0, 74, 0, 76, 0, 0, 0], drum: 'k.h.s.h.k.hhs.h.' },
+    heavy: { bpm: 160, bass: [28, 28, 40, 28, 28, 40, 31, 31, 28, 28, 40, 28, 34, 33, 31, 30], lead: [64, 0, 0, 67, 0, 0, 70, 0, 69, 0, 67, 0, 64, 0, 63, 0], drum: 'kks.kks.kks.k.ss' },
+    synth: { bpm: 128, bass: [36, 48, 36, 48, 39, 51, 39, 51, 34, 46, 34, 46, 38, 50, 38, 50], lead: [72, 75, 79, 0, 82, 0, 79, 75, 70, 0, 74, 77, 0, 74, 0, 0], drum: 'k.h.s.h.k.h.s.hh' },
+    mellow: { bpm: 100, bass: [41, 0, 0, 48, 0, 0, 45, 0, 43, 0, 0, 50, 0, 0, 48, 0], lead: [72, 0, 0, 76, 0, 79, 0, 0, 77, 0, 0, 74, 0, 72, 0, 0], drum: 'k...h...s...h..h' },
+    shanty: { bpm: 138, bass: [38, 0, 45, 0, 38, 0, 45, 0, 36, 0, 43, 0, 36, 0, 43, 0], lead: [62, 62, 64, 66, 67, 0, 66, 64, 62, 0, 60, 0, 59, 60, 62, 0], drum: 'k..sk..sk..sk.ss' },
+    arabic: { bpm: 140, bass: [38, 0, 38, 39, 0, 38, 0, 42, 43, 0, 42, 39, 0, 38, 0, 0], lead: [62, 63, 66, 67, 69, 0, 67, 66, 63, 0, 62, 0, 66, 63, 62, 0], drum: 'k.hsk.h.k.hsk.ss' },
+    chip: { bpm: 156, bass: [45, 57, 45, 57, 48, 60, 48, 60, 50, 62, 50, 62, 52, 64, 52, 64], lead: [81, 84, 88, 84, 81, 0, 79, 81, 84, 0, 88, 91, 88, 0, 86, 0], drum: 'k.hhs.hhk.hhs.hh' },
     win: { bpm: 130, bass: [36, 0, 43, 0, 48, 0, 43, 0, 41, 0, 45, 0, 43, 0, 47, 0], lead: [72, 76, 79, 84, 79, 76, 72, 0, 77, 81, 84, 81, 79, 0, 83, 0], drum: 'k...s...k...s.s.' }
   },
-  music(name) {
+  // арена → настроение музыки
+  STAGE_MUSIC: { temple: 'fight', ice: 'mellow', city: 'synth', beach: 'chip', pit: 'heavy', metro: 'synth', arcade: 'chip', roof: 'fight', graveyard: 'heavy', station: 'synth', ship: 'shanty', desert: 'arabic', dome: 'mellow', forge: 'heavy', throne: 'fight' },
+  music(name, stage) {
+    if (name === 'menu' && this.track && this.track.startsWith('menu')) return;
+    if (name === 'menu') name = choice(['menu', 'menu2', 'menu3']);
+    if (name === 'fight' && stage != null && typeof STAGES !== 'undefined' && STAGES[stage]) name = this.STAGE_MUSIC[STAGES[stage].id] || 'fight';
     this.wantTrack = name;
     if (!this.ctx) return;
     if (this.track === name) return;
@@ -262,5 +284,47 @@ const Sound = {
       } catch (e) { }
       this.nextT += dt; this.step++;
     }
+  },
+  // ----- звуки арен: зацикленный шумовой фон + случайные события -----
+  AMB: {
+    temple: { bed: [500, 'bandpass', 0.05], ev: ['chime', 0.006] }, ice: { bed: [700, 'bandpass', 0.09], ev: ['gust', 0.008] },
+    city: { bed: [3000, 'highpass', 0.11], ev: ['drip', 0.04] }, beach: { bed: [400, 'lowpass', 0.12], ev: ['gull', 0.004] },
+    pit: { bed: [160, 'lowpass', 0.22], ev: ['bubble', 0.06] }, metro: { bed: [120, 'lowpass', 0.12], ev: ['train', 0.0015] },
+    arcade: { bed: [900, 'bandpass', 0.04], ev: ['bleep', 0.05] }, roof: { bed: [600, 'bandpass', 0.1], ev: ['gust', 0.01] },
+    graveyard: { bed: [500, 'bandpass', 0.06], ev: ['crow', 0.004] }, station: { bed: [90, 'lowpass', 0.1], ev: ['beep', 0.012] },
+    ship: { bed: [2600, 'highpass', 0.12], ev: ['creak', 0.008] }, desert: { bed: [800, 'bandpass', 0.08], ev: ['gust', 0.01] },
+    dome: { bed: [200, 'lowpass', 0.1], ev: ['bubble', 0.03] }, forge: { bed: [180, 'lowpass', 0.14], ev: ['anvil', 0.012] },
+    throne: { bed: [300, 'lowpass', 0.08], ev: ['crackle', 0.06] }
+  },
+  amb: null,
+  ambient(stage) {
+    if (this.amb) { const a = this.amb; this.amb = null; clearInterval(a.iv); try { a.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.4); setTimeout(() => { try { a.src.stop(); } catch (e) { } }, 2000); } catch (e) { } }
+    if (stage == null || !this.ctx || typeof STAGES === 'undefined' || !STAGES[stage]) return;
+    const id = STAGES[stage].id, P = this.AMB[id]; if (!P) return;
+    const c = this.ctx, src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = this.noiseBuf; src.loop = true; fl.type = P.bed[1]; fl.frequency.value = P.bed[0]; g.gain.value = 0;
+    g.gain.setTargetAtTime(P.bed[2], c.currentTime, 0.8);
+    src.connect(fl); fl.connect(g); g.connect(this.sfx); src.start();
+    const a = { src, g, id, iv: setInterval(() => { if (this.amb === a && !this.quiet && !this.muteReasons.size && Math.random() < P.ev[1] * 6) this.ambEvent(P.ev[0]); }, 100) };
+    this.amb = a;
+  },
+  ambEvent(k) {
+    try {
+      const r = Math.random;
+      switch (k) {
+        case 'bubble': this.tone(120 + r() * 200, 0.12, 'sine', 0.12, 400 + r() * 300); if (r() < 0.3) this.noise(0.3, 0.12, 200, 'lowpass'); break;
+        case 'drip': this.tone(1800 + r() * 1500, 0.04, 'sine', 0.05, 900); break;
+        case 'gust': this.noise(1.6, 0.12, 400 + r() * 500, 'bandpass', 0, 1200); break;
+        case 'chime': this.tone(1320 * (r() < 0.5 ? 1 : 1.5), 1.4, 'sine', 0.05); break;
+        case 'gull': this.tone(1500, 0.25, 'triangle', 0.05, 900); this.tone(1400, 0.2, 'triangle', 0.04, 850, 0.3); break;
+        case 'train': this.noise(4, 0.3, 140, 'lowpass', 0, 60); this.tone(55, 3.5, 'sawtooth', 0.06, 45); break;
+        case 'bleep': this.tone([523, 659, 784, 1046][Math.floor(r() * 4)], 0.06, 'square', 0.03); break;
+        case 'crow': this.noise(0.18, 0.12, 900, 'bandpass'); this.noise(0.16, 0.1, 850, 'bandpass', 0.25); break;
+        case 'beep': this.tone(880, 0.08, 'sine', 0.04); this.tone(660, 0.08, 'sine', 0.03, null, 0.12); break;
+        case 'creak': this.tone(90 + r() * 40, 0.5, 'sawtooth', 0.03, 70); break;
+        case 'anvil': this.tone(1600, 0.4, 'square', 0.04, 1500); this.noise(0.06, 0.15, 3000, 'highpass'); break;
+        case 'crackle': this.noise(0.03, 0.12, 2500, 'highpass'); break;
+      }
+    } catch (e) { }
   }
 };

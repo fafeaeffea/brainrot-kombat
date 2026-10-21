@@ -1,5 +1,5 @@
 'use strict';
-const FAT_PRE = 72, OUT_K = 2;
+const FAT_PRE = 72, OUT_K = 2, SK = 2; // SK — масштаб сцены: спрайты бойцов рисуются в двойном разрешении
 // Игровой цикл, раунды, камера, HUD, победа
 const Game = {
   f: [null, null], ai: [null, null], inp: [null, null], projs: [], ghosts: [],
@@ -8,7 +8,7 @@ const Game = {
   ann: null, cabK: 1, zones: [], cine: 0, punch: 0, impactT: 0, impactCd: 0, redA: 0, splats: [], banner: null, combos: [null, null], stageState: {}, paused: false, adPause: false, cfg: null, fat: null, finisher: null, loser: null, winner: null, result: null,
   init() {
     this.cv = document.getElementById('game'); this.cv.width = W * OUT_K; this.cv.height = H * OUT_K; this.ctx = this.cv.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
-    [this.scene, this.sctx] = mkCanvas(W, H);
+    [this.scene, this.sctx] = mkCanvas(W * SK, H * SK);
     this.inp[0] = new PlayerInput([KEYMAP1], 0, true);
     this.inp[1] = new PlayerInput([KEYMAP2], 1, false);
     this.last = performance.now(); this.acc = 0;
@@ -17,7 +17,7 @@ const Game = {
   // ---------- запуск ----------
   startMatch(cfg) {
     this.cfg = cfg;
-    Stage.set(cfg.stage != null ? cfg.stage : randi(0, STAGES.length - 1));
+    this.stageIdx = cfg.stage != null ? cfg.stage : randi(0, STAGES.length - 1); Stage.set(this.stageIdx);
     this.f = [new Fighter(cfg.p1, 0, this), new Fighter(cfg.p2, 1, this)];
     this.ai = [cfg.ai1 ? new AI(this.f[0], cfg.ai1) : null, cfg.ai2 ? new AI(this.f[1], cfg.ai2) : null];
     this.inp[0].maps = cfg.mode === '2p' ? [KEYMAP1] : [KEYMAP1, KEYMAP2];
@@ -25,15 +25,19 @@ const Game = {
     this.wins = [0, 0]; this.round = 1; this.result = null; this.paused = false;
     Sound.setQuiet(cfg.mode === 'demo');
     if (cfg.mode === 'demo') { this.state = 'match'; this.startRound(); }
-    else { this.state = 'vs'; this.vsT = 0; Sound.play('gong'); Sound.music('fight'); Sound.say(cfg.p1.name + '! против! ' + cfg.p2.name + '!', 'big'); }
+    else {
+      // экран «против»: бой начнётся, только когда диктор договорит оба имени
+      this.state = 'vs'; this.vsT = 0; this.vsDone = false; Sound.play('gong'); Sound.music('fight', this.stageIdx); Sound.ambient(this.stageIdx);
+      Sound.say(cfg.p1.name + '! против! ' + cfg.p2.name + '!', 'big', () => { this.vsDone = true; });
+    }
   },
   startRound() {
     this.state = 'match';
     this.f[0].reset(STAGE_W / 2 - 62, 1); this.f[1].reset(STAGE_W / 2 + 62, -1);
-    this.camX = (STAGE_W - W) / 2; this.zoom = 1; this.projs = []; this.ghosts = []; FX.clear(); this.stageState = {}; this.zones = []; this.splats = []; this.cine = 0; this.banner = null; this.impactT = 0;
+    this.camX = (STAGE_W - W) / 2; this.zoom = 1; this.projs = []; this.ghosts = []; FX.clear(); this.stageState = {}; this.zones = []; this.splats = []; this.cine = 0; this.banner = null; this.impactT = 0; this.pops = [];
     this.timer = Settings.time || 0; this.tsub = 0; this.phase = 'intro'; this.pt = 0; this.ann = null; this.fat = null; this.dim = 0; this.dimT = 0;
     this.finisher = this.loser = this.winner = null; this.combos = [null, null]; this.inp.forEach(i => i.clear());
-    if (this.cfg.mode !== 'demo') Sound.music('fight');
+    if (this.cfg.mode !== 'demo') Sound.music('fight', this.stageIdx);
   },
   get demo() { return this.cfg && this.cfg.mode === 'demo'; },
   announce(lines, dur = 70) { this.ann = { lines, t: 0, dur }; },
@@ -84,10 +88,21 @@ const Game = {
     if (!live) { if (!this.ai[i]) this.inp[i].poll(this.frame, f.facing); return null; }
     if (this.ai[i]) return this.ai[i].get(this);
     const c = this.inp[i].poll(this.frame, f.facing);
+    // фаталити — только стрелками: срабатывает на последней стрелке последовательности
+    if (ph === 'finish' && this.finisher === f) {
+      const fa = f.ch.fatal, near = Math.abs(this.loser.x - f.x) <= 120;
+      if (c.arrows) {
+        const A = c.arrows; let k = 0;
+        for (let n = Math.min(A.length, fa.seq.length); n > 0; n--) { let ok = true; for (let j = 0; j < n; j++) if (A[A.length - n + j] !== fa.seq[j]) { ok = false; break; } if (ok) { k = n; break; } }
+        this.fatProg = k;
+        if (k === fa.seq.length && near) { c.special = 'fatal'; this.inp[i].clear(); this.fatProg = 0; }
+      }
+      // вблизи стрелки не двигают бойца — можно спокойно набрать комбинацию
+      if (near) c.l = c.r = c.u = c.d = 0;
+      if (c.special) return c;
+    }
     if (c.p || c.k) {
-      const fa = f.ch.fatal;
-      if (ph === 'finish' && this.finisher === f && seqMatch(c.seq, fa.seq) && (fa.btn === 'p' ? c.p : c.k)) c.special = 'fatal';
-      else if (c.p && seqMatch(c.seq, ['D', 'B'])) c.special = 'unique';
+      if (c.p && seqMatch(c.seq, ['D', 'B'])) c.special = 'unique';
       else if (c.p && seqMatch(c.seq, ['B', 'F'])) c.special = 'proj';
       else if (c.k && seqMatch(c.seq, ['D', 'F'])) c.special = 'dash';
       if (c.special) { c.p = c.k = 0; this.inp[i].clear(); }
@@ -105,7 +120,7 @@ const Game = {
     for (const sp of this.splats) { sp.t++; for (const d of sp.drips) if (d.len < 70) d.len += d.sp; }
     this.splats = this.splats.filter(sp => sp.t < sp.life);
     if (this.banner) this.banner.t++;
-    if (this.state === 'vs') { if (++this.vsT > 160) { this.startRound(); } return; }
+    if (this.state === 'vs') { if (++this.vsT > 150 && (this.vsDone || this.vsT > 600)) { this.startRound(); } return; }
     if (this.state !== 'match') return;
     if (this.ann) this.ann.t++;
     if (this.hitstop > 0) { this.hitstop--; return; }
@@ -130,6 +145,7 @@ const Game = {
     FX.update();
     this.camera();
     for (const c of this.combos) if (c) c.t++;
+    if (this.pops) { for (const p of this.pops) p.t++; this.pops = this.pops.filter(p => p.t < 70); }
   },
   camera() {
     const [a, b] = this.f;
@@ -318,7 +334,7 @@ const Game = {
     } else if (ph === 'drawWait') {
       if (t >= 120) { this.round++; this.startRound(); }
     } else if (ph === 'finishWait') {
-      if (this.loser.st === 'dizzy') { this.phase = 'finish'; this.pt = 0; this.finishT = 6 * 60; const her = this.loser.ch.g === 'f'; this.announce([{ txt: her ? 'ДОБЕЙ ЕЁ!' : 'ДОБЕЙ ЕГО!', s: 4, col: ['#ffd0c0', '#e02010', '#7a0008'] }], 80); Sound.play('fatal'); if (!this.demo) Sound.say(her ? 'Добей её!' : 'Добей его!', 'big'); }
+      if (this.loser.st === 'dizzy') { this.phase = 'finish'; this.pt = 0; this.finishT = 12 * 60; this.fatProg = 0; const her = this.loser.ch.g === 'f'; this.announce([{ txt: her ? 'ДОБЕЙ ЕЁ!' : 'ДОБЕЙ ЕГО!', s: 4, col: ['#ffd0c0', '#e02010', '#7a0008'] }], 80); Sound.play('fatal'); if (!this.demo) Sound.say(her ? 'Добей её!' : 'Добей его!', 'big'); }
     } else if (ph === 'finish') {
       if (--this.finishT <= 0) { const l = this.loser; l.finishMe = false; l.dead = true; l.setSt('fall'); l.vy = -1; l.vx = 0; l.y = GROUND - 1; this.phase = 'finished'; this.pt = 0; }
     } else if (ph === 'finished') {
@@ -377,7 +393,7 @@ const Game = {
     const a = choice(CHARS); let b = choice(CHARS); while (b === a) b = choice(CHARS);
     this.startMatch({ mode: 'demo', p1: a, p2: b, ai1: 3, ai2: 3 });
   },
-  startDemo() { Sound.music('menu'); this.demoNext(); },
+  startDemo() { Sound.music('menu'); Sound.ambient(null); this.demoNext(); },
   // ---------- отрисовка ----------
   render() {
     this.render0();
@@ -387,6 +403,7 @@ const Game = {
   },
   render0() {
     const c = this.sctx, ctx = this.ctx;
+    c.setTransform(SK, 0, 0, SK, 0, 0); c.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
     const OW = W * OUT_K, OH = H * OUT_K;
     if (this.state === 'vs') { this.drawVS(c); ctx.drawImage(this.scene, 0, 0, OW, OH); return; }
@@ -401,7 +418,7 @@ const Game = {
     if (this.phase === 'victory' && this.winner) this.drawRays(c, cx);
     if (this.boltT > 0) { this.boltT--; const bx = (this.boltX || 0) - cx; bolt(c, bx + rand(-30, 30), -5, bx, this.boltY || GROUND, '#cfe8ff', 12, 12, 2); bolt(c, bx + rand(-20, 20), -5, bx, this.boltY || GROUND, '#ffffff', 12, 8, 1); if (this.boltT === 0) this.boltY = null; }
     if (this.fat && this.fat.sc.back) this.fat.sc.back(c, cx, this, this.fat.a, this.fat.v, this.fat.t, this.fat.s);
-    for (const gh of this.ghosts) { c.globalAlpha = gh.life / 14 * 0.5; c.save(); c.translate(Math.round(gh.x - cx), 0); c.scale(gh.fc, 1); c.drawImage(gh.img, -SPR_OX, Math.round(gh.y) - SPR_OY); c.restore(); }
+    for (const gh of this.ghosts) { c.globalAlpha = gh.life / 14 * 0.5; c.save(); c.translate(Math.round(gh.x - cx), 0); c.scale(gh.fc, 1); c.drawImage(gh.img, -SPR_OX, Math.round(gh.y) - SPR_OY, SPR_W, SPR_H); c.restore(); }
     c.globalAlpha = 1;
     const order = this.f.slice().sort((p, q) => (p.st === 'attack' || p.st === 'dash' || p.st === 'script' && this.fat && this.fat.a === p ? 1 : 0) - (q.st === 'attack' || q.st === 'dash' || q.st === 'script' && this.fat && this.fat.a === q ? 1 : 0));
     for (const f of order) f.draw(c, cx);
@@ -414,7 +431,7 @@ const Game = {
     // камера с приближением
     if (this.zoom > 1.01) {
       const z = this.zoom, vw = W / z, vh = H / z, x0 = clamp(this.zx - vw / 2, 0, W - vw), y0 = clamp(this.zy - vh / 2, 0, H - vh);
-      ctx.drawImage(this.scene, x0, y0, vw, vh, 0, 0, OW, OH);
+      ctx.drawImage(this.scene, x0 * SK, y0 * SK, vw * SK, vh * SK, 0, 0, OW, OH);
     } else ctx.drawImage(this.scene, 0, 0, OW, OH);
     ctx.setTransform(OUT_K, 0, 0, OUT_K, 0, 0);
     if (this.impactT > 0) this.drawImpact(ctx);
@@ -510,10 +527,53 @@ const Game = {
     }
     this.drawAnn(ctx);
     if (this.phase === 'finish' && !this.ai[this.finisher.idx]) {
-      const fa = this.finisher.ch.fatal, arrows = fa.seq.map(s => s === 'F' ? '→' : s === 'B' ? '←' : s === 'D' ? '↓' : '↑').join(' ');
-      if (Settings.hints !== false) drawText(ctx, 'ФАТАЛИТИ: ' + arrows + ' + ' + (fa.btn === 'p' ? 'РУКА' : 'НОГА'), W / 2, H - 14, 1, ['#ffd0c0', '#ff6a5a']);
+      if (Settings.hints !== false) this.drawFatHint(ctx, this.finisher.ch.fatal, this.fatProg || 0);
     }
+    this.drawDmgPops(ctx);
     if (this.phase === 'victory') this.drawVictoryText(ctx);
+  },
+  // подсказка фаталити: крупные стрелки, набранные подсвечиваются
+  drawFatHint(ctx, fa, prog) {
+    const n = fa.seq.length, bw = 22, gap = 5, tw = n * bw + (n - 1) * gap, x0 = Math.round(W / 2 - tw / 2), y0 = H - 62, t = this.frame;
+    ctx.fillStyle = 'rgba(10,0,4,0.72)'; ctx.fillRect(x0 - 10, y0 - 13, tw + 20, bw + 21);
+    ctx.fillStyle = '#7a0a10'; ctx.fillRect(x0 - 10, y0 - 13, tw + 20, 1); ctx.fillRect(x0 - 10, y0 + bw + 7, tw + 20, 1);
+    drawText(ctx, 'ФАТАЛИТИ: ' + fa.name.toUpperCase(), W / 2, y0 - 7, 1, ['#ffd0c0', '#ff6a5a']);
+    for (let i = 0; i < n; i++) {
+      const x = x0 + i * (bw + gap), y = y0, on = i < prog, nxt = i === prog && (t >> 4) & 1;
+      ctx.fillStyle = on ? '#ffd040' : nxt ? '#a02020' : '#3a1418'; ctx.fillRect(x, y, bw, bw);
+      ctx.fillStyle = on ? '#fff6c0' : '#5a2a2a'; ctx.fillRect(x, y, bw, 1); ctx.fillRect(x, y, 1, bw);
+      ctx.fillStyle = '#000'; ctx.fillRect(x, y + bw - 1, bw, 1); ctx.fillRect(x + bw - 1, y, 1, bw);
+      this.drawArrow(ctx, x + bw / 2, y + bw / 2, fa.seq[i], on ? '#5a0a00' : '#ffffff');
+    }
+    drawText(ctx, 'ТОЛЬКО СТРЕЛКИ, ВБЛИЗИ', W / 2, y0 + bw + 2, 1, '#c09090');
+  },
+  drawArrow(ctx, cx, cy, d, col) {
+    // стрелка вправо, повёрнутая по направлению (F/B — относительно взгляда бойца)
+    const f = this.finisher, right = (d === 'F') === (f ? f.facing === 1 : true);
+    const ang = d === 'U' ? -Math.PI / 2 : d === 'D' ? Math.PI / 2 : right ? 0 : Math.PI;
+    ctx.save(); ctx.translate(Math.round(cx), Math.round(cy)); ctx.rotate(ang); ctx.fillStyle = col;
+    ctx.fillRect(-7, -2, 8, 5); for (let i = 0; i < 6; i++) ctx.fillRect(1 + i, -6 + i, 1, 13 - i * 2);
+    ctx.restore();
+  },
+  // всплывающий урон — под полоской здоровья получившего удар
+  dmgPop(f, v, blocked) {
+    if (!this.pops) this.pops = [];
+    const old = this.pops.find(p => p.f === f && p.t < 20);
+    if (old) { old.v += v; old.t = 0; old.blocked = blocked && old.blocked; return; }
+    this.pops.push({ f, v, t: 0, blocked });
+  },
+  drawDmgPops(ctx) {
+    if (!this.pops) return;
+    for (const p of this.pops) {
+      const f = p.f, right = f.idx === 1, bx = right ? W - 12 - 196 : 12, edge = right ? bx + 196 - Math.round(196 * f.hp / 100) : bx + Math.round(196 * f.hp / 100);
+      const k = p.t < 6 ? 1 + (6 - p.t) * 0.15 : 1, x = clamp(edge, bx + 14, bx + 196 - 14), y = 36 + Math.min(6, p.t * 0.25);
+      ctx.globalAlpha = p.t > 50 ? (70 - p.t) / 20 : 1;
+      const sp = textSprite('-' + p.v, 2, p.blocked ? ['#e0f0ff', '#7ab0ff'] : ['#ffffff', '#ff4a2a'], '#000', '#000');
+      const w = Math.round(sp.width * k), h = Math.round(sp.height * k);
+      ctx.drawImage(sp, Math.round(x - w / 2), Math.round(y), w, h);
+      if (p.blocked) drawText(ctx, 'БЛОК', Math.round(x), Math.round(y + h + 5), 1, '#a0c8ff');
+      ctx.globalAlpha = 1;
+    }
   },
   drawDemoHUD(ctx) { this.drawAnn(ctx); if (this.phase === 'victory') this.drawVictoryText(ctx); },
   bar(ctx, x, y, w, f, right) {
@@ -571,7 +631,7 @@ const Game = {
       const left = f.idx === 0, R = f.R;
       renderFighter(R, f.ch, ANIM.victory(f.ch, t), { anim: t });
       const x = left ? lerp(-100, 120, k) : lerp(W + 100, W - 120, k);
-      c.save(); c.translate(Math.round(x), 250); c.scale(left ? 2 : -2, 2); c.drawImage(R.cv, -SPR_OX, -SPR_OY); c.restore();
+      c.save(); c.translate(Math.round(x), 250); c.scale(left ? 2 : -2, 2); c.drawImage(R.cv, -SPR_OX, -SPR_OY, SPR_W, SPR_H); c.restore();
       drawText(c, f.ch.name, left ? 20 : W - 20, 30, f.ch.name.length > 12 ? 2 : 3, ['#fff6c0', '#ffb030'], left ? 'left' : 'right');
       drawText(c, f.ch.title + ', ' + f.ch.world, left ? 20 : W - 20, 50, 1, '#ffd0c0', left ? 'left' : 'right');
     }

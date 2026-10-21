@@ -2,8 +2,13 @@
 // Пиксельный растеризатор и скелетная отрисовка бойцов
 const SPR_W = 150, SPR_H = 132, SPR_OX = 75, SPR_OY = 118;
 
+// Глобальный масштаб спрайтов: растр хранит w*RS × h*RS «тонких» пикселей,
+// а все примитивы принимают логические (1x) координаты (дробные — адресуют тонкий пиксель).
+const RS = 2;
 class Raster {
-  constructor(w, h) {
+  constructor(lw, lh, s = RS) {
+    this.s = s; this.lw = lw; this.lh = lh;
+    const w = Math.round(lw * s), h = Math.round(lh * s);
     this.w = w; this.h = h;
     [this.cv, this.ctx] = mkCanvas(w, h);
     this.img = this.ctx.createImageData(w, h);
@@ -11,10 +16,22 @@ class Raster {
     this.tmp = new Uint32Array(w * h);
   }
   clear() { this.d.fill(0); }
-  px(x, y, c) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= this.w || y >= this.h) return; this.d[y * this.w + x] = c; }
-  get(x, y) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= this.w || y >= this.h) return 0; return this.d[y * this.w + x]; }
+  // прямоугольник в тонких пикселях [X0,X1)×[Y0,Y1)
+  blk(X0, Y0, X1, Y1, c) {
+    X0 = X0 < 0 ? 0 : X0; Y0 = Y0 < 0 ? 0 : Y0; X1 = X1 > this.w ? this.w : X1; Y1 = Y1 > this.h ? this.h : Y1;
+    const w = this.w, d = this.d;
+    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) d[y * w + x] = c;
+  }
+  // логический пиксель (блок s×s)
+  px(x, y, c) { const s = this.s, X = Math.floor(x * s), Y = Math.floor(y * s), n = Math.max(1, Math.round(s)); this.blk(X, Y, X + n, Y + n, c); }
+  // один тонкий пиксель
+  // «тонкий» пиксель = 1/RS логического; в растре крупнее (портреты) он растёт пропорционально
+  get fn() { return Math.max(1, Math.round(this.s / RS)); }
+  dot(x, y, c) { const n = this.fn, X = Math.floor(x * this.s), Y = Math.floor(y * this.s); if (n === 1) { if (X < 0 || Y < 0 || X >= this.w || Y >= this.h) return; this.d[Y * this.w + X] = c; } else this.blk(X, Y, X + n, Y + n, c); }
+  get(x, y) { const X = Math.floor(x * this.s), Y = Math.floor(y * this.s); if (X < 0 || Y < 0 || X >= this.w || Y >= this.h) return 0; return this.d[Y * this.w + X]; }
   disk(cx, cy, r, c) {
     if (r <= 0.3) { this.px(cx, cy, c); return; }
+    const s = this.s; cx *= s; cy *= s; r *= s;
     const x0 = Math.floor(cx - r), x1 = Math.ceil(cx + r), y0 = Math.floor(cy - r), y1 = Math.ceil(cy + r), rr = r * r, w = this.w;
     for (let y = Math.max(0, y0); y <= Math.min(this.h - 1, y1); y++) {
       const dy = y + 0.5 - cy;
@@ -25,6 +42,7 @@ class Raster {
     }
   }
   ellipse(cx, cy, rx, ry, c) {
+    const s = this.s; cx *= s; cy *= s; rx *= s; ry *= s;
     const x0 = Math.floor(cx - rx), x1 = Math.ceil(cx + rx), y0 = Math.floor(cy - ry), y1 = Math.ceil(cy + ry), w = this.w;
     for (let y = Math.max(0, y0); y <= Math.min(this.h - 1, y1); y++) {
       const dy = (y + 0.5 - cy) / ry;
@@ -35,9 +53,9 @@ class Raster {
     }
   }
   capsule(x1, y1, x2, y2, r1, r2, c) {
-    // прямая растеризация «таблетки» по расстоянию до отрезка (быстрее, чем набор дисков)
+    const s = this.s; x1 *= s; y1 *= s; x2 *= s; y2 *= s; r1 *= s; r2 *= s;
     const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy, rm = Math.max(r1, r2), w = this.w, d = this.d;
-    if (L2 < 0.01) { this.disk(x1, y1, rm, c); return; }
+    if (L2 < 0.01) { this.disk(x1 / s, y1 / s, rm / s, c); return; }
     const X0 = Math.max(0, Math.floor(Math.min(x1, x2) - rm)), X1 = Math.min(w - 1, Math.ceil(Math.max(x1, x2) + rm));
     const Y0 = Math.max(0, Math.floor(Math.min(y1, y2) - rm)), Y1 = Math.min(this.h - 1, Math.ceil(Math.max(y1, y2) + rm)), dr = r2 - r1;
     for (let y = Y0; y <= Y1; y++) {
@@ -50,31 +68,40 @@ class Raster {
       }
     }
   }
+  // линия толщиной в логический пиксель (сглаженная лесенка на тонкой сетке)
   line(x1, y1, x2, y2, c) {
-    const n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1))));
-    for (let i = 0; i <= n; i++) { const t = i / n; this.px(Math.floor(x1 + (x2 - x1) * t), Math.floor(y1 + (y2 - y1) * t), c); }
+    const s = this.s, n0 = Math.max(1, Math.round(s));
+    const n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * s));
+    for (let i = 0; i <= n; i++) { const t = i / n, X = Math.floor((x1 + (x2 - x1) * t) * s), Y = Math.floor((y1 + (y2 - y1) * t) * s); this.blk(X, Y, X + n0, Y + n0, c); }
+  }
+  // тонкая линия в один тонкий пиксель
+  fline(x1, y1, x2, y2, c) {
+    const s = this.s, n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * s));
+    for (let i = 0; i <= n; i++) { const t = i / n; this.dot(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, c); }
   }
   rect(x, y, w, h, c) {
-    x = Math.round(x); y = Math.round(y);
-    for (let j = Math.max(0, y); j < Math.min(this.h, y + h); j++)
-      for (let i = Math.max(0, x); i < Math.min(this.w, x + w); i++) this.d[j * this.w + i] = c;
+    const s = this.s, X = Math.round(x * s), Y = Math.round(y * s);
+    this.blk(X, Y, X + Math.round(w * s), Y + Math.round(h * s), c);
   }
+  // прямоугольник в тонких пикселях с логическим началом (для мелких деталей)
+  frect(x, y, fw, fh, c) { const n = this.fn, X = Math.floor(x * this.s), Y = Math.floor(y * this.s); this.blk(X, Y, X + fw * n, Y + fh * n, c); }
   poly(pts, c) {
+    const s = this.s;
     let minY = 1e9, maxY = -1e9;
-    for (const p of pts) { minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]); }
-    const n = pts.length;
+    for (const p of pts) { minY = Math.min(minY, p[1] * s); maxY = Math.max(maxY, p[1] * s); }
+    const n = pts.length, xs = [];
     for (let y = Math.max(0, Math.floor(minY)); y <= Math.min(this.h - 1, Math.ceil(maxY)); y++) {
-      const sy = y + 0.5, xs = [];
+      const sy = y + 0.5; xs.length = 0;
       for (let i = 0; i < n; i++) {
-        const a = pts[i], b = pts[(i + 1) % n];
-        if ((a[1] <= sy && b[1] > sy) || (b[1] <= sy && a[1] > sy)) xs.push(a[0] + (sy - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+        const a = pts[i], b = pts[(i + 1) % n], ay = a[1] * s, by = b[1] * s;
+        if ((ay <= sy && by > sy) || (by <= sy && ay > sy)) xs.push(a[0] * s + (sy - ay) / (by - ay) * (b[0] - a[0]) * s);
       }
       xs.sort((p, q) => p - q);
       for (let k = 0; k + 1 < xs.length; k += 2)
         for (let x = Math.max(0, Math.ceil(xs[k] - 0.5)); x <= Math.min(this.w - 1, Math.floor(xs[k + 1] - 0.5)); x++) this.d[y * this.w + x] = c;
     }
   }
-  // Выборочный (цветной) контур: тёмный, но с оттенком соседнего пикселя;
+  // Выборочный (цветной) контур в один тонкий пиксель: тёмный, но с оттенком соседнего пикселя;
   // сверху/слева чуть светлее, снизу/справа — почти чистый тёмный
   outline(oc) {
     const w = this.w, h = this.h, d = this.d, t = this.tmp;
@@ -86,10 +113,10 @@ class Raster {
         const i = row + x;
         if (d[i] !== 0) continue;
         let c = 0, k = 0;
-        if (x < w - 1 && d[i + 1]) { c = d[i + 1]; k = 0.34; }
-        else if (y < h - 1 && d[i + w]) { c = d[i + w]; k = 0.3; }
-        else if (x > 0 && d[i - 1]) { c = d[i - 1]; k = 0.12; }
-        else if (y > 0 && d[i - w]) { c = d[i - w]; k = 0.08; }
+        if (x < w - 1 && d[i + 1]) { c = d[i + 1]; k = 0.3; }
+        else if (y < h - 1 && d[i + w]) { c = d[i + w]; k = 0.26; }
+        else if (x > 0 && d[i - 1]) { c = d[i - 1]; k = 0.1; }
+        else if (y > 0 && d[i - w]) { c = d[i - w]; k = 0.06; }
         if (!c) continue;
         const j = 1 - k;
         t[i] = (0xff000000 | (((oB * j + ((c >> 16) & 255) * k) | 0) << 16) | (((oG * j + ((c >> 8) & 255) * k) | 0) << 8) | ((oR * j + (c & 255) * k) | 0)) >>> 0;
@@ -99,6 +126,7 @@ class Raster {
   }
   // Затемнить уже нарисованные пиксели внутри «таблетки» (ambient occlusion / падающая тень)
   shadowCapsule(x1, y1, x2, y2, r1, r2, amt = 0.7) {
+    const s = this.s; x1 *= s; y1 *= s; x2 *= s; y2 *= s; r1 *= s; r2 *= s;
     const dx = x2 - x1, dy = y2 - y1, L2 = Math.max(0.01, dx * dx + dy * dy), rm = Math.max(r1, r2), w = this.w, d = this.d;
     const X0 = Math.max(0, Math.floor(Math.min(x1, x2) - rm)), X1 = Math.min(w - 1, Math.ceil(Math.max(x1, x2) + rm));
     const Y0 = Math.max(0, Math.floor(Math.min(y1, y2) - rm)), Y1 = Math.min(this.h - 1, Math.ceil(Math.max(y1, y2) + rm)), dr = r2 - r1;
@@ -116,7 +144,7 @@ class Raster {
       }
     }
   }
-  // Ограничивающий прямоугольник непустых пикселей
+  // Ограничивающий прямоугольник непустых пикселей (в тонких пикселях)
   bounds() {
     const w = this.w, h = this.h, d = this.d;
     let x0 = w, y0 = h, x1 = -1, y1 = -1;
@@ -126,15 +154,16 @@ class Raster {
     }
     return x1 < 0 ? null : [x0, y0, x1 + 1, y1 + 1];
   }
-  // Поворот другого растра (ближайший сосед) с опорной точкой
+  // Поворот другого растра (ближайший сосед) с опорной точкой; sx,sy — в логических координатах src, dx,dy — в логических своих
   blitRot(src, sx, sy, dx, dy, ang, flipY) {
-    if (Math.abs(ang) < 0.14) ang = 0;
+    if (Math.abs(ang) < 0.1) ang = 0;
     const bb = src.bounds(); if (!bb) return;
+    const S = this.s, k = src.s / S;
+    sx *= src.s; sy *= src.s; dx *= S; dy *= S;
     const s = Math.sin(ang), co = Math.cos(ang), sw = src.w, sh = src.h, sd = src.d, w = this.w, d = this.d;
-    // рамка содержимого, повёрнутая в координаты назначения
     let mx0 = 1e9, my0 = 1e9, mx1 = -1e9, my1 = -1e9;
-    for (let k = 0; k < 4; k++) {
-      const u = (k & 1 ? bb[2] : bb[0]) - sx, v0 = (k & 2 ? bb[3] : bb[1]) - sy, v = flipY ? -v0 : v0;
+    for (let q = 0; q < 4; q++) {
+      const u = ((q & 1 ? bb[2] : bb[0]) - sx) / k, v0 = ((q & 2 ? bb[3] : bb[1]) - sy) / k, v = flipY ? -v0 : v0;
       const X = u * co - v * s, Y = u * s + v * co;
       if (X < mx0) mx0 = X; if (X > mx1) mx1 = X; if (Y < my0) my0 = Y; if (Y > my1) my1 = Y;
     }
@@ -142,7 +171,7 @@ class Raster {
       const ry = y + 0.5 - dy;
       for (let x = Math.max(0, Math.floor(dx + mx0 - 1)); x <= Math.min(w - 1, Math.ceil(dx + mx1 + 1)); x++) {
         const rx = x + 0.5 - dx;
-        let u = rx * co + ry * s, v = -rx * s + ry * co;
+        let u = (rx * co + ry * s) * k, v = (-rx * s + ry * co) * k;
         if (flipY) v = -v;
         const ix = Math.floor(u + sx), iy = Math.floor(v + sy);
         if (ix < 0 || iy < 0 || ix >= sw || iy >= sh) continue;
@@ -232,86 +261,94 @@ function ramp(col, k = 0) {
 }
 // tex(s, v, ti, t) — текстура: s — пиксели вдоль оси, v — поперёк (-1..1, + к «спине» отрезка), ti — тон;
 // возвращает индекс тона (0..5) или готовый цвет (> 15)
+// Все шейдеры работают на тонкой сетке растра, а tex-колбэки получают логические координаты.
+// DI — лёгкий шахматный дизеринг на границах тонов (пиксель-арт градиент)
+const DI = 0.028;
 function tube(R, a, b, r1, r2, col, k, tex, flat) {
-  const rp = typeof col === 'string' ? ramp(col, k || 0) : col;
-  const ax = a.x, ay = a.y, dx = b.x - ax, dy = b.y - ay, L2 = Math.max(0.01, dx * dx + dy * dy), len = Math.sqrt(L2);
-  const rm = Math.max(r1, r2), w = R.w, d = R.d, dr = r2 - r1, big = rm >= 2.6, huge = rm >= 5;
-  const X0 = Math.max(0, Math.floor(Math.min(ax, b.x) - rm)), X1 = Math.min(w - 1, Math.ceil(Math.max(ax, b.x) + rm));
-  const Y0 = Math.max(0, Math.floor(Math.min(ay, b.y) - rm)), Y1 = Math.min(R.h - 1, Math.ceil(Math.max(ay, b.y) + rm));
-  const qx = -dy / len, qy = dx / len;
+  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, S = R.s, is = 1 / S;
+  const ax = a.x * S, ay = a.y * S, bx = b.x * S, by = b.y * S, R1 = r1 * S, R2 = r2 * S;
+  const dx = bx - ax, dy = by - ay, L2 = Math.max(0.01, dx * dx + dy * dy), len = Math.sqrt(L2);
+  const rmL = Math.max(r1, r2), rm = rmL * S, w = R.w, d = R.d, dr = R2 - R1, big = rmL >= 2.6, huge = rmL >= 5;
+  const X0 = Math.max(0, Math.floor(Math.min(ax, bx) - rm)), X1 = Math.min(w - 1, Math.ceil(Math.max(ax, bx) + rm));
+  const Y0 = Math.max(0, Math.floor(Math.min(ay, by) - rm)), Y1 = Math.min(R.h - 1, Math.ceil(Math.max(ay, by) + rm));
+  const qx = -dy / len, qy = dx / len, rim = 0.62 * S, rim2 = 1.7 * S;
   for (let y = Y0; y <= Y1; y++) {
     const py = y + 0.5 - ay;
     for (let x = X0; x <= X1; x++) {
       const px = x + 0.5 - ax;
       let t = (px * dx + py * dy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
-      const ex = px - dx * t, ey = py - dy * t, r = r1 + dr * t, d2 = ex * ex + ey * ey;
+      const ex = px - dx * t, ey = py - dy * t, r = R1 + dr * t, d2 = ex * ex + ey * ey;
       if (d2 > r * r) continue;
       const dd = Math.sqrt(d2), nx = ex / r, ny = ey / r, n2 = nx * nx + ny * ny;
-      const I = nx * LX + ny * LY + (n2 < 1 ? Math.sqrt(1 - n2) : 0) * LZ;
+      const I = nx * LX + ny * LY + (n2 < 1 ? Math.sqrt(1 - n2) : 0) * LZ + (((x + y) & 1) ? DI : -DI);
       let ti;
       if (flat) ti = 2;
-      else if (r >= 1.7 && dd > r - 0.85 && I < 0.12) ti = 0;
+      else if (r >= 1.7 * S && dd > r - rim && I < 0.12) ti = 0;
       else if (big && I > 0.94) ti = 4;
       else if (I > 0.74) ti = 3;
       else if (I > 0.3) ti = 2;
-      else if (huge && dd > r - 1.9 && I < 0) ti = 5;
+      else if (huge && dd > r - rim2 && I < 0) ti = 5;
       else ti = 1;
-      if (tex) { ti = tex(t * len, (ex * qx + ey * qy) / r, ti, t); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
+      if (tex) { ti = tex(t * len * is, (ex * qx + ey * qy) / r, ti, t); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
       d[y * w + x] = rp[ti];
     }
   }
 }
 function sphere(R, cx, cy, r, col, k, tex) {
-  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, w = R.w, d = R.d, big = r >= 2.4;
+  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, S = R.s, is = 1 / S, w = R.w, d = R.d, big = r >= 2.4;
   if (r <= 0.6) { R.px(cx, cy, rp[2]); return; }
+  const rl = r; cx *= S; cy *= S; r *= S;
+  const rim = 0.62 * S, rim2 = 1.6 * S;
   for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(R.h - 1, Math.ceil(cy + r)); y++) {
     const ny0 = (y + 0.5 - cy);
     for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(w - 1, Math.ceil(cx + r)); x++) {
       const nx0 = x + 0.5 - cx, d2 = nx0 * nx0 + ny0 * ny0;
       if (d2 > r * r) continue;
       const dd = Math.sqrt(d2), nx = nx0 / r, ny = ny0 / r, n2 = nx * nx + ny * ny;
-      const I = nx * LX + ny * LY + Math.sqrt(Math.max(0, 1 - n2)) * LZ;
+      const I = nx * LX + ny * LY + Math.sqrt(Math.max(0, 1 - n2)) * LZ + (((x + y) & 1) ? DI : -DI);
       let ti;
-      if (r >= 1.7 && dd > r - 0.85 && I < 0.12) ti = 0;
+      if (rl >= 1.7 && dd > r - rim && I < 0.12) ti = 0;
       else if (big && I > 0.94) ti = 4;
       else if (I > 0.74) ti = 3;
       else if (I > 0.3) ti = 2;
-      else if (r >= 5 && dd > r - 1.8 && I < 0) ti = 5;
+      else if (rl >= 5 && dd > r - rim2 && I < 0) ti = 5;
       else ti = 1;
-      if (tex) { ti = tex(nx0, ny0, ti); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
+      if (tex) { ti = tex(nx0 * is, ny0 * is, ti); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
       d[y * w + x] = rp[ti];
     }
   }
 }
 // Эллипсоид (освещён как сфера)
 function ovoid(R, cx, cy, rx, ry, col, k, tex) {
-  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, w = R.w, d = R.d, big = Math.min(rx, ry) >= 2.4, ek = (1 - 0.9 / Math.min(rx, ry)) ** 2;
+  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, S = R.s, is = 1 / S, w = R.w, d = R.d, mn = Math.min(rx, ry), big = mn >= 2.4, ek = (1 - 0.62 / mn) ** 2;
+  cx *= S; cy *= S; rx *= S; ry *= S;
   for (let y = Math.max(0, Math.floor(cy - ry)); y <= Math.min(R.h - 1, Math.ceil(cy + ry)); y++) {
     const ny = (y + 0.5 - cy) / ry;
     for (let x = Math.max(0, Math.floor(cx - rx)); x <= Math.min(w - 1, Math.ceil(cx + rx)); x++) {
       const nx = (x + 0.5 - cx) / rx, n2 = nx * nx + ny * ny;
       if (n2 > 1) continue;
-      const I = nx * LX + ny * LY + Math.sqrt(1 - n2) * LZ;
+      const I = nx * LX + ny * LY + Math.sqrt(1 - n2) * LZ + (((x + y) & 1) ? DI : -DI);
       const edge = n2 > ek;
       let ti;
-      if (edge && Math.min(rx, ry) >= 1.7 && I < 0.12) ti = 0;
+      if (edge && mn >= 1.7 && I < 0.12) ti = 0;
       else if (big && I > 0.94) ti = 4;
       else if (I > 0.74) ti = 3;
       else if (I > 0.3) ti = 2;
       else ti = 1;
-      if (tex) { ti = tex(x + 0.5 - cx, y + 0.5 - cy, ti); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
+      if (tex) { ti = tex((x + 0.5 - cx) * is, (y + 0.5 - cy) * is, ti); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
       d[y * w + x] = rp[ti];
     }
   }
 }
 // Пластина-многоугольник с фаской: светлая грань к свету, тёмная — от света
-function plate(R, pts, col, k, tex) {
-  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, n = pts.length, w = R.w, d = R.d;
+function plate(R, pts, col, k, tex, bev) {
+  const rp = typeof col === 'string' ? ramp(col, k || 0) : col, n = pts.length, w = R.w, d = R.d, S = R.s, is = 1 / S;
+  const P = pts.map(p => [p[0] * S, p[1] * S]), bv = (bev == null ? 0.8 : bev) * S, B2 = bv * bv;
   let area = 0, minY = 1e9, maxY = -1e9;
-  for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; area += a[0] * b[1] - b[0] * a[1]; if (a[1] < minY) minY = a[1]; if (a[1] > maxY) maxY = a[1]; }
+  for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n]; area += a[0] * b[1] - b[0] * a[1]; if (a[1] < minY) minY = a[1]; if (a[1] > maxY) maxY = a[1]; }
   const sg = area > 0 ? 1 : -1, E = [];
   for (let i = 0; i < n; i++) {
-    const a = pts[i], b = pts[(i + 1) % n], ex = b[0] - a[0], ey = b[1] - a[1], l = Math.hypot(ex, ey) || 1;
+    const a = P[i], b = P[(i + 1) % n], ex = b[0] - a[0], ey = b[1] - a[1], l = Math.hypot(ex, ey) || 1;
     const nx = ey / l * sg, ny = -ex / l * sg; // наружная нормаль
     const L = nx * LX + ny * LY;
     E.push([a[0], a[1], ex / l, ey / l, l, L > 0.25 ? 3 : L < -0.3 ? 0 : 1]);
@@ -320,14 +357,14 @@ function plate(R, pts, col, k, tex) {
   for (let y = Math.max(0, Math.floor(minY)); y <= Math.min(R.h - 1, Math.ceil(maxY)); y++) {
     const sy = y + 0.5; xs.length = 0;
     for (let i = 0; i < n; i++) {
-      const a = pts[i], b = pts[(i + 1) % n];
+      const a = P[i], b = P[(i + 1) % n];
       if ((a[1] <= sy && b[1] > sy) || (b[1] <= sy && a[1] > sy)) xs.push(a[0] + (sy - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
     }
     xs.sort((p, q) => p - q);
     for (let q = 0; q + 1 < xs.length; q += 2)
       for (let x = Math.max(0, Math.ceil(xs[q] - 0.5)); x <= Math.min(w - 1, Math.floor(xs[q + 1] - 0.5)); x++) {
         const sx = x + 0.5;
-        let best = 1.05, bt = 2;
+        let best = B2, bt = 2;
         for (let e = 0; e < n; e++) {
           const Ee = E[e], px = sx - Ee[0], py = sy - Ee[1];
           let t = px * Ee[2] + py * Ee[3]; t = t < 0 ? 0 : t > Ee[4] ? Ee[4] : t;
@@ -335,7 +372,7 @@ function plate(R, pts, col, k, tex) {
           if (dd < best) { best = dd; bt = Ee[5]; }
         }
         let ti = bt;
-        if (tex) { ti = tex(sx, sy, ti); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
+        if (tex) { ti = tex(sx * is, sy * is, ti); if (ti < 0) continue; if (ti > 15) { d[y * w + x] = ti; continue; } }
         d[y * w + x] = rp[ti];
       }
   }
@@ -374,7 +411,7 @@ function drawArm(R, ch, J, side, P, k, f) {
   tube(R, el, hd, 2.6 * m, 2.2 * m, P.fore || P.skin, k, tx.fore);
   if (P.bracer) tube(R, lp(el, hd, 0.35), lp(el, hd, 0.85), 2.8 * m, 2.6 * m, P.bracer, k, tx.bracer);
   if (D.arm) D.arm(R, J, side, P, k, sh, el, hd);
-  if (side === 'F' && ch.weapon) drawWeapon(R, ch, J, P, f);
+  if (side === 'F' && ch.weapon && !(f && f.portrait)) drawWeapon(R, ch, J, P, f);
   if (ch.fin) { // плавник вместо кулака
     const d = Math.atan2(hd.y - el.y, hd.x - el.x), gc = P.glove || P.skin;
     plate(R, [[hd.x + Math.cos(d - 1.3) * 2.6, hd.y + Math.sin(d - 1.3) * 2.6], [hd.x + Math.cos(d - 0.15) * 6.5, hd.y + Math.sin(d - 0.15) * 6.5], [hd.x + Math.cos(d + 0.5) * 4.5, hd.y + Math.sin(d + 0.5) * 4.5], [hd.x + Math.cos(d + 1.3) * 2.6, hd.y + Math.sin(d + 1.3) * 2.6]], gc, k - 0.1);
@@ -519,9 +556,10 @@ function renderFighter(R, ch, pose, f) {
   if (!ch.headless) {
     ao(R, J.head, J.head, ch.build.headR * 0.85, ch.build.headR * 0.85, 0.75, 1, 2.2);
     drawNeck(R, ch, J, P);
-    HEAD_R.clear();
-    (D.head || drawHeadDefault)(HEAD_R, P, ctx);
-    R.blitRot(HEAD_R, 28, 28, J.head.x, J.head.y, J.ha);
+    const HR = R.headR || HEAD_R;
+    HR.clear();
+    (D.head || drawHeadDefault)(HR, P, ctx);
+    R.blitRot(HR, 28, 28, J.head.x, J.head.y, J.ha);
   }
   if (D.preArm) D.preArm(R, J, P, ctx);
   // тень от передней руки на корпус
@@ -535,4 +573,19 @@ function renderFighter(R, ch, pose, f) {
   }
   R.flush();
   return J;
+}
+
+// Детальный портрет-бюст для экрана выбора: тот же персонаж, но растр в высоком разрешении
+const _bust = {};
+function renderPortrait(ch, size) {
+  const key = ch.id + ':' + size; if (_bust[key]) return _bust[key];
+  const span = 27, sc = size / span, R = new Raster(SPR_W, SPR_H, sc);
+  R.headR = new Raster(56, 56, sc);
+  const pose = mkPose(stanceOf(ch), { hF: [3, 17], hB: [1, 17], torso: 2, head: -2, eF: { x: -1, y: 0.2 }, eB: { x: -1, y: 0.2 } });
+  const J = renderFighter(R, ch, pose, { anim: 0, portrait: true });
+  const hx = J ? J.head.x : SPR_OX + 2, hy = J ? J.head.y : SPR_OY - 62;
+  const [cv, c] = mkCanvas(size, size);
+  c.imageSmoothingEnabled = false;
+  c.drawImage(R.cv, Math.round((hx - span * 0.45) * sc), Math.round((hy - span * 0.42) * sc), size, size, 0, 0, size, size);
+  _bust[key] = cv; return cv;
 }
