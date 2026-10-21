@@ -47,7 +47,7 @@ const Game = {
     if (this.impactCd > 0) return;
     this.impactT = 6; this.impactCd = 14; this.hitstop = Math.max(this.hitstop, 7); this.punch = 0.14; this.redA = 0.35;
     Sound.sting('impact');
-    if (Settings.blood) for (let i = 0, n = randi(2, 4); i < n; i++) this.splats.push({ x: rand(20, W - 20), y: rand(10, H * 0.6), r: rand(5, 13), life: 300, t: 0, dots: Array.from({ length: randi(8, 16) }, () => { const a = rand(0, 6.283), d = rand(0.6, 2.4); return [Math.cos(a) * d, Math.sin(a) * d * 0.8, rand(0.5, 2.5)]; }), drips: Array.from({ length: randi(1, 3) }, () => ({ dx: rand(-0.6, 0.6), len: 0, sp: rand(0.15, 0.5) })) });
+    if (Settings.blood && this.splats.length < 4) for (let i = 0, n = randi(1, 2); i < n; i++) this.splats.push({ x: rand(20, W - 20), y: rand(10, H * 0.6), r: rand(5, 13), life: 300, t: 0, dots: Array.from({ length: randi(8, 16) }, () => { const a = rand(0, 6.283), d = rand(0.6, 2.4); return [Math.cos(a) * d, Math.sin(a) * d * 0.8, rand(0.5, 2.5)]; }), drips: Array.from({ length: randi(1, 3) }, () => ({ dx: rand(-0.6, 0.6), len: 0, sp: rand(0.15, 0.5) })) });
   },
   other(f) { return this.f[1 - f.idx]; },
   projOf(f) { return this.projs.some(p => p.owner === f && !p.dead); },
@@ -159,7 +159,11 @@ const Game = {
       const F = this.fat, mid = (F.a.x + F.v.x) / 2, zt = F.pre < FAT_PRE ? lerp(1, 1.6, ease(F.pre / FAT_PRE)) : (F.sc.zoom || 1.38);
       this.camX = lerp(this.camX, clamp(mid - W / 2, 0, STAGE_W - W), 0.15);
       this.zoom = lerp(this.zoom, zt + this.punch, 0.12); this.punch *= 0.85;
-      this.zx = mid - this.camX; this.zy = GROUND - 56;
+      const fo = F.pre >= FAT_PRE && F.s.foc;
+      if (fo) {
+        if (F.s.snap) { this.zx = fo.x - this.camX; this.zy = fo.y; F.s.snap = false; }
+        else { this.zx = lerp(this.zx, fo.x - this.camX, 0.14); this.zy = lerp(this.zy, fo.y, 0.14); }
+      } else { this.zx = mid - this.camX; this.zy = GROUND - 56; }
       return;
     }
     // камера приближается к бойцам: чем ближе они друг к другу, тем крупнее

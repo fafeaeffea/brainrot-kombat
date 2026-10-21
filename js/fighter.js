@@ -2,23 +2,23 @@
 // Боец: состояния, удары, спецприёмы
 const GRAV = 0.36, JUMP_V = -7.4;
 const MOVES = {
-  jab: { st: 4, act: 3, rec: 9, dmg: 5, hs: 15, bs: 8, kb: 1.8, box: [6, -52, 20, 9], snd: 'punch', chain: ['cross', 'kick', 'uppercut', 'sweep', 'roundhouse'] },
-  cross: { st: 5, act: 3, rec: 11, dmg: 6, hs: 17, bs: 9, kb: 2.4, box: [6, -52, 22, 9], snd: 'punch', chain: ['kick', 'uppercut', 'roundhouse', 'sweep'] },
-  kick: { st: 7, act: 4, rec: 13, dmg: 8, hs: 18, bs: 10, kb: 3, box: [8, -62, 24, 16], snd: 'kick', chain: ['uppercut', 'roundhouse'] },
-  roundhouse: { st: 9, act: 5, rec: 18, dmg: 12, kb: 5, kd: true, bs: 12, box: [6, -66, 26, 18], snd: 'kick', heavy: true },
-  uppercut: { st: 6, act: 5, rec: 20, dmg: 13, launch: [-7.6, 2.2], bs: 12, box: [2, -78, 18, 34], snd: 'heavy', heavy: true },
-  sweep: { st: 7, act: 5, rec: 16, dmg: 7, trip: true, low: true, bs: 10, box: [4, -12, 30, 12], snd: 'kick', crouch: true },
-  airP: { st: 3, act: 8, rec: 4, dmg: 7, hs: 16, kb: 2, bs: 8, box: [4, -46, 20, 18], air: true, snd: 'punch' },
-  airK: { st: 4, act: 10, rec: 4, dmg: 9, hs: 18, kb: 3, bs: 9, box: [4, -40, 26, 18], air: true, snd: 'kick' },
+  jab: { st: 4, act: 3, rec: 9, dmg: 5, hs: 15, bs: 8, kb: 1.8, box: [6, -54, 31, 12], snd: 'punch', chain: ['cross', 'kick', 'uppercut', 'sweep', 'roundhouse'] },
+  cross: { st: 5, act: 3, rec: 11, dmg: 6, hs: 17, bs: 9, kb: 2.4, box: [6, -54, 34, 12], snd: 'punch', chain: ['kick', 'uppercut', 'roundhouse', 'sweep'] },
+  kick: { st: 7, act: 4, rec: 13, dmg: 8, hs: 18, bs: 10, kb: 3, box: [8, -64, 36, 20], snd: 'kick', chain: ['uppercut', 'roundhouse'] },
+  roundhouse: { st: 9, act: 5, rec: 18, dmg: 12, kb: 5, kd: true, bs: 12, box: [6, -68, 38, 22], snd: 'kick', heavy: true },
+  uppercut: { st: 6, act: 5, rec: 20, dmg: 13, launch: [-7.6, 2.2], bs: 12, box: [2, -80, 26, 38], snd: 'heavy', heavy: true },
+  sweep: { st: 7, act: 5, rec: 16, dmg: 7, trip: true, low: true, bs: 10, box: [4, -14, 40, 14], snd: 'kick', crouch: true },
+  airP: { st: 3, act: 8, rec: 4, dmg: 7, hs: 16, kb: 2, bs: 8, box: [4, -48, 28, 22], air: true, snd: 'punch' },
+  airK: { st: 4, act: 10, rec: 4, dmg: 9, hs: 18, kb: 3, bs: 9, box: [4, -42, 34, 22], air: true, snd: 'kick' },
   throw: { st: 3, act: 2, rec: 22, dmg: 12, box: [4, -58, 18, 44], throw: true },
-  backfist: { st: 8, act: 4, rec: 14, dmg: 9, hs: 20, bs: 11, kb: 4, box: [4, -60, 26, 12], snd: 'heavy', heavy: true, spin: true, chain: ['kick', 'sweep'] },
-  pushkick: { st: 7, act: 4, rec: 15, dmg: 7, hs: 16, bs: 10, kb: 7.5, box: [6, -46, 28, 14], snd: 'kick' },
-  overhead: { st: 13, act: 4, rec: 14, dmg: 10, hs: 20, bs: 12, kb: 3, box: [6, -66, 22, 36], snd: 'heavy', heavy: true, overhead: true },
+  backfist: { st: 8, act: 4, rec: 14, dmg: 9, hs: 20, bs: 11, kb: 4, box: [4, -62, 36, 16], snd: 'heavy', heavy: true, spin: true, chain: ['kick', 'sweep'] },
+  pushkick: { st: 7, act: 4, rec: 15, dmg: 7, hs: 16, bs: 10, kb: 7.5, box: [6, -48, 38, 18], snd: 'kick' },
+  overhead: { st: 13, act: 4, rec: 14, dmg: 10, hs: 20, bs: 12, kb: 3, box: [6, -68, 32, 38], snd: 'heavy', heavy: true, overhead: true },
   divekick: { st: 3, act: 40, rec: 6, dmg: 9, hs: 18, kb: 3.5, bs: 10, box: [2, -26, 24, 22], air: true, dive: true, snd: 'kick' },
 };
 MOVES.jab.chain.push('backfist', 'overhead', 'pushkick'); MOVES.cross.chain.push('backfist', 'pushkick'); MOVES.kick.chain.push('pushkick');
 // для оружия чуть дальше достаёт
-for (const k of ['jab', 'cross']) MOVES[k + 'W'] = Object.assign({}, MOVES[k], { box: [6, -58, 34, 22], dmg: MOVES[k].dmg + 1, snd: 'slashHit' });
+for (const k of ['jab', 'cross']) MOVES[k + 'W'] = Object.assign({}, MOVES[k], { box: [6, -60, 44, 24], dmg: MOVES[k].dmg + 1, snd: 'slashHit' });
 
 const UNIQUE_CD = 240; // 4 секунды между коронными приёмами
 const DASH = {
