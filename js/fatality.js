@@ -22,7 +22,7 @@ const FATALITIES = {
       if (t < 85) { v.tint = 'char'; v.tintK = clamp((t - 15) / 60, 0, 1); const s = Math.sin(t * 0.5); v.forcePose = mkPose({ hF: [2, -22 + s * 4], hB: [-2, -20 - s * 4], torso: s * 15, head: s * 20, hy: 3, fF: [7, 0], fB: [-7, 0] }); }
       if (t === 85) { v.skeleton = true; v.tint = null; Sound.play('gore'); }
       if (t > 85 && t < 118) v.forcePose = blendPose(ANIM.dizzy(v.ch, t), mkPose(POSES.lie), ease((t - 85) / 30));
-      if (t === 120) { FX.burst(v, { power: 0.6, vyMin: -1.5, vyMax: 0.3, g: 0.15, tint: '#3a3030', tintK: 0.35, spread: 1.2 }); v.hidden = true; FX.smoke(v.x, GROUND - 4, 20); Sound.play('crunch'); }
+      if (t === 120) { FX.burst(v, { power: 0.6, vyMin: -1.5, vyMax: 0.3, g: 0.15, tint: '#3a3030', tintK: 0.35, spread: 1.2 }); v.hidden = true; FX.smoke(v.x, GROUND - 4, 20); Sound.play('crunch'); g.impact(); }
     }
   },
   shatter: {
@@ -45,7 +45,7 @@ const FATALITIES = {
       if (t < 34 && t % 8 === 0) Sound.play('move');
       if (t === 36) { Sound.play('laser'); g.flashA = 0.8; g.shake(6); }
       if (t > 36 && t < 90) { v.tint = 'flash'; v.tintK = clamp((t - 36) / 20, 0, 1); g.shake(2); if (t % 2 === 0) FX.spark(v.x + rand(-10, 10), v.y - rand(0, 60), 2, '#bff6ff'); v.forcePose = mkPose(POSES.hit, { hF: [0, -22], hB: [-4, -20], head: -30 }); }
-      if (t === 64) { FX.burst(v, { power: 0, spread: 0.6, vyMin: -2.4, vyMax: -0.4, g: -0.01, tint: '#ffffff', tintK: 0.5, floor: false, lifeMin: 50, lifeMax: 110, fade: true }); v.hidden = true; }
+      if (t === 64) { FX.burst(v, { power: 0, spread: 0.6, vyMin: -2.4, vyMax: -0.4, g: -0.01, tint: '#ffffff', tintK: 0.5, floor: false, lifeMin: 50, lifeMax: 110, fade: true }); v.hidden = true; g.impact(); }
       if (t === 90) { for (let x = -14; x <= 14; x++) FX.decals.push({ x: Math.round(v.x + x), y: GROUND + randi(0, 3), col: '#1a1416', sz: 1 }); a.forcePose = mkPose({ hF: [7, -12], eF: { x: 1, y: -0.2 }, hB: [2, 13], torso: 0, fF: [5, 0], fB: [-5, 0] }); }
       if (t > 90 && t % 3 === 0) FX.smoke(v.x + rand(-8, 8), GROUND - 2, 1);
     },
@@ -71,7 +71,7 @@ const FATALITIES = {
         const img = snapCanvas(v), cut = SPR_OY - 34;
         s.top = { img, sy: 0, sh: cut, x: v.x, y: v.y - (SPR_OY - cut), vx: dir * 0.35, vy: 0, rot: 0, vr: dir * 0.012, f: v.facing };
         s.bot = { img, sy: cut, sh: SPR_H - cut, x: v.x, y: v.y, vx: 0, vy: 0, rot: 0, vr: 0, f: v.facing };
-        v.hidden = true; Sound.play('gore');
+        v.hidden = true; Sound.play('gore'); g.impact(); FX.blood(v.x, v.y - 34, dir, 30, 2);
       }
       if (s.top) {
         const T = s.top; T.x += T.vx; T.rot += T.vr; if (Math.abs(T.rot) > 0.25) { T.vy += 0.25; T.y += T.vy; T.vx *= 0.98; }
@@ -91,7 +91,7 @@ const FATALITIES = {
     }
   },
   hammer: {
-    dur: 165,
+    dur: 165, zoom: 1.25,
     update(g, a, v, t, s) {
       if (t === 1) { a.forcePose = mkPose(POSES.raise); }
       if (t === 8 || t === 18) { Sound.play('thunder'); g.flashA = 0.7; s.bolt = 4; }
@@ -122,7 +122,7 @@ const FATALITIES = {
       if (t === 55) { s.ghost = snapCanvas(v); s.gx = v.x; s.gy = v.y; }
       if (t === 75) { v.tint = null; v.skeleton = true; Sound.play('skull'); }
       if (t > 75 && t < 110) v.forcePose = blendPose(ANIM.dizzy(v.ch, t), mkPose(POSES.lie), ease((t - 75) / 30));
-      if (t === 112) { FX.burst(v, { power: 0.5, vyMin: -1, vyMax: 0.4, g: 0.12, tint: '#8a7a9a', tintK: 0.4 }); v.hidden = true; Sound.play('crunch'); }
+      if (t === 112) { FX.burst(v, { power: 0.5, vyMin: -1, vyMax: 0.4, g: 0.12, tint: '#8a7a9a', tintK: 0.4 }); v.hidden = true; Sound.play('crunch'); g.impact(); }
       if (t === 150) a.y = GROUND;
     },
     front(ctx, cx, g, a, v, t, s) {
@@ -171,7 +171,7 @@ const FATALITIES = {
     }
   },
   bombs: {
-    dur: 185,
+    dur: 185, zoom: 1.15,
     update(g, a, v, t, s) {
       if (!s.b) { s.b = []; s.ax = a.x; }
       if (t === 1) { a.forcePose = ANIM.victory(a.ch, 0); a.forcePose = mkPose(POSES.leapUp); Sound.play('plane'); }
@@ -190,7 +190,7 @@ const FATALITIES = {
     }
   },
   bat: {
-    dur: 160,
+    dur: 160, zoom: 1.2,
     update(g, a, v, t, s) {
       const dir = Math.sign(v.x - a.x) || 1; s.dir = dir;
       if (t === 1 || t === 11 || t === 21) { Sound.play('tun'); FX.text(a.x, a.y - 80 - (t / 10) * 6, 'ТУН!', 2, ['#fff6b0', '#ff9a1a'], 40); a.forcePose = ANIM.victory(a.ch, (t % 20) + 15); }
@@ -212,7 +212,7 @@ const FATALITIES = {
     }
   },
   tornado: {
-    dur: 180,
+    dur: 180, zoom: 1.08,
     update(g, a, v, t, s) {
       a.visFlip = t < 110 ? ((t >> 2) & 1) === 1 : false;
       a.forcePose = t < 110 ? mkPose(POSES.spinA) : null;
@@ -221,7 +221,7 @@ const FATALITIES = {
       if (t > 25 && t < 100) { v.offY = -Math.pow((t - 25) / 75, 1.6) * 230; v.visFlip = ((t >> 1) & 1) === 1; v.forcePose = mkPose(POSES.fall, { rot: t * 25 }); }
       if (t === 100) v.hidden = true;
       if (t > 110 && t < 160 && t % 2 === 0) { FX.p('blood', v.x + rand(-40, 40), -5, rand(-0.3, 0.3), rand(1, 3), 120, choice(BLOOD_COLS), Settings.blood ? randi(1, 2) : 1, 0.12); if (t % 8 === 0) FX.p('px', v.x + rand(-30, 30), -5, 0, 2, 120, '#ece6d2', 2, 0.15, { floor: true }); }
-      if (t === 130) Sound.play('gore');
+      if (t === 130) { Sound.play('gore'); g.impact(); }
     },
     back(ctx, cx, g, a, v, t, s) {
       if (!s.k) return;

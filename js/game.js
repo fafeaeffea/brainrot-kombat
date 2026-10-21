@@ -1,10 +1,11 @@
 'use strict';
+const FAT_PRE = 72;
 // Игровой цикл, раунды, камера, HUD, победа
 const Game = {
   f: [null, null], ai: [null, null], inp: [null, null], projs: [], ghosts: [],
   state: 'demo', phase: 'none', pt: 0, frame: 0, camX: (STAGE_W - W) / 2, zoom: 1, zx: W / 2, zy: H / 2,
   shakeAmp: 0, flashA: 0, dim: 0, dimT: 0, hitstop: 0, slow: 0, wins: [0, 0], round: 1, timer: 99, tsub: 0,
-  ann: null, combos: [null, null], stageState: {}, paused: false, adPause: false, cfg: null, fat: null, finisher: null, loser: null, winner: null, result: null,
+  ann: null, cine: 0, punch: 0, impactT: 0, impactCd: 0, redA: 0, splats: [], banner: null, combos: [null, null], stageState: {}, paused: false, adPause: false, cfg: null, fat: null, finisher: null, loser: null, winner: null, result: null,
   init() {
     this.cv = document.getElementById('game'); this.ctx = this.cv.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
     [this.scene, this.sctx] = mkCanvas(W, H);
@@ -23,19 +24,26 @@ const Game = {
     this.inp[0].pad = 0; this.inp[1].pad = 1;
     this.wins = [0, 0]; this.round = 1; this.result = null; this.paused = false;
     if (cfg.mode === 'demo') { this.state = 'match'; this.startRound(); }
-    else { this.state = 'vs'; this.vsT = 0; Sound.play('gong'); Sound.music('fight'); Sound.say(cfg.p1.name + ' против ' + cfg.p2.name); }
+    else { this.state = 'vs'; this.vsT = 0; Sound.play('gong'); Sound.music('fight'); Sound.say(cfg.p1.name + '! против! ' + cfg.p2.name + '!', 'big'); }
   },
   startRound() {
     this.state = 'match';
     this.f[0].reset(STAGE_W / 2 - 62, 1); this.f[1].reset(STAGE_W / 2 + 62, -1);
-    this.camX = (STAGE_W - W) / 2; this.zoom = 1; this.projs = []; this.ghosts = []; FX.clear(); this.stageState = {};
+    this.camX = (STAGE_W - W) / 2; this.zoom = 1; this.projs = []; this.ghosts = []; FX.clear(); this.stageState = {}; this.splats = []; this.cine = 0; this.banner = null; this.impactT = 0;
     this.timer = Settings.time || 0; this.tsub = 0; this.phase = 'intro'; this.pt = 0; this.ann = null; this.fat = null; this.dim = 0; this.dimT = 0;
     this.finisher = this.loser = this.winner = null; this.combos = [null, null]; this.inp.forEach(i => i.clear());
     if (this.cfg.mode !== 'demo') Sound.music('fight');
   },
   get demo() { return this.cfg && this.cfg.mode === 'demo'; },
   announce(lines, dur = 70) { this.ann = { lines, t: 0, dur }; },
-  shake(a) { this.shakeAmp = Math.max(this.shakeAmp, a); },
+  shake(a) { this.shakeAmp = Math.max(this.shakeAmp, a); if (a >= 9 && this.phase === 'fatality' && this.fat && this.fat.pre >= FAT_PRE) this.impact(); },
+  // кадр удара в фаталити: стоп-кадр, двухцветная вспышка, кровь на «объективе»
+  impact() {
+    if (this.impactCd > 0) return;
+    this.impactT = 6; this.impactCd = 14; this.hitstop = Math.max(this.hitstop, 7); this.punch = 0.14; this.redA = 0.35;
+    Sound.sting('impact');
+    if (Settings.blood) for (let i = 0, n = randi(2, 4); i < n; i++) this.splats.push({ x: rand(20, W - 20), y: rand(10, H * 0.6), r: rand(5, 13), life: 300, t: 0, dots: Array.from({ length: randi(8, 16) }, () => { const a = rand(0, 6.283), d = rand(0.6, 2.4); return [Math.cos(a) * d, Math.sin(a) * d * 0.8, rand(0.5, 2.5)]; }), drips: Array.from({ length: randi(1, 3) }, () => ({ dx: rand(-0.6, 0.6), len: 0, sp: rand(0.15, 0.5) })) });
+  },
   other(f) { return this.f[1 - f.idx]; },
   projOf(f) { return this.projs.some(p => p.owner === f && !p.dead); },
   projThreat(f) { return this.projs.some(p => p.owner !== f && !p.dead && Math.sign(f.x - p.x) === Math.sign(p.vx) && Math.abs(f.x - p.x) < 140); },
@@ -89,6 +97,12 @@ const Game = {
     if (this.flashA > 0) this.flashA = Math.max(0, this.flashA - 0.06);
     this.shakeAmp *= 0.85; if (this.shakeAmp < 0.3) this.shakeAmp = 0;
     this.dim = lerp(this.dim, this.dimT, 0.08);
+    this.cine = lerp(this.cine, this.phase === 'fatality' ? 1 : 0, 0.1);
+    if (this.impactT > 0) this.impactT--; if (this.impactCd > 0) this.impactCd--;
+    if (this.redA > 0) this.redA = Math.max(0, this.redA - 0.03);
+    for (const sp of this.splats) { sp.t++; for (const d of sp.drips) if (d.len < 70) d.len += d.sp; }
+    this.splats = this.splats.filter(sp => sp.t < sp.life);
+    if (this.banner) this.banner.t++;
     if (this.state === 'vs') { if (++this.vsT > 160) { this.startRound(); } return; }
     if (this.state !== 'match') return;
     if (this.ann) this.ann.t++;
@@ -120,6 +134,13 @@ const Game = {
       const w = this.winner, k = clamp(this.pt / 70, 0, 1);
       this.zoom = lerp(1, 1.55, ease(k));
       this.zx = lerp(W / 2, w.x - this.camX, ease(k)); this.zy = lerp(H / 2, w.y - 42, ease(k));
+      return;
+    }
+    if (this.phase === 'fatality' && this.fat) {
+      const F = this.fat, mid = (F.a.x + F.v.x) / 2, zt = F.pre < FAT_PRE ? lerp(1, 1.6, ease(F.pre / FAT_PRE)) : (F.sc.zoom || 1.38);
+      this.camX = lerp(this.camX, clamp(mid - W / 2, 0, STAGE_W - W), 0.15);
+      this.zoom = lerp(this.zoom, zt + this.punch, 0.12); this.punch *= 0.85;
+      this.zx = mid - this.camX; this.zy = GROUND - 56;
       return;
     }
     this.zoom = lerp(this.zoom, 1, 0.1);
@@ -223,36 +244,47 @@ const Game = {
     a.setSt('script'); v.setSt('script');
     a.forcePose = null; v.forcePose = f => ANIM.dizzy(f.ch, f.anim);
     this.projs = [];
-    this.fat = { sc, t: 0, a, v, s: {} };
+    this.fat = { sc, t: 0, a, v, s: {}, pre: 0 };
     this.phase = 'fatality'; this.pt = 0; this.dimT = 0.62; this.ann = null;
-    Sound.stopMusic(); Sound.play('fatal');
+    Sound.stopMusic(); Sound.play('fatal'); Sound.sting('big'); this.redA = 0.5;
     Store.set('fatalities', Store.get('fatalities', 0) + (this.demo ? 0 : 1));
   },
   fatalityStep() {
-    const F = this.fat; F.t++;
+    const F = this.fat;
+    if (F.pre < FAT_PRE) {
+      const p = ++F.pre, a = F.a, col = a.ch.pal.fx;
+      for (const f of this.f) { f.t++; f.anim++; f.computePose(); }
+      if (p % 34 === 1) Sound.sting('heart');
+      if (p === 14) { a.forcePose = mkPose(POSES.raise); this.banner = { t: 0, name: a.ch.name, fat: a.ch.fatal.name, col }; Sound.play('whooshH'); }
+      if (p > 14) for (let i = 0; i < 3; i++) FX.p('px', a.x + rand(-16, 16), a.y - rand(0, 70), rand(-0.2, 0.2), -rand(0.6, 1.8), randi(18, 34), choice([col, col, '#ffffff', '#ffd040']), 1, -0.01, { floor: false, fade: true });
+      if (p === 58) { this.boltT = 8; this.boltX = a.x; this.boltY = a.y - 70; this.flashA = 0.5; this.shakeAmp = 8; Sound.play('thunder'); FX.ring(a.x, a.y - 40, col, 44, 22); FX.ring(a.x, a.y - 40, '#ffffff', 28, 14); FX.dust(a.x, GROUND, 14); }
+      if (p === FAT_PRE) a.forcePose = null;
+      return;
+    }
+    F.t++;
     F.sc.update(this, F.a, F.v, F.t, F.s);
     for (const f of this.f) { f.t++; f.anim++; if (f.flash > 0) f.flash--; f.computePose(); }
-    if (F.t === F.sc.dur - 30) { this.announce([{ txt: 'ФАТАЛИТИ', s: 5, col: ['#ff6a5a', '#c0101a', '#5a0008'] }, { txt: F.a.ch.fatal.name, s: 1, col: '#ffd0c0' }], 120); Sound.play('gong'); Sound.say('Фаталити!'); F.drip = true; }
+    if (F.t === F.sc.dur - 30) { this.announce([{ txt: 'ФАТАЛИТИ', s: 5, col: ['#ff6a5a', '#c0101a', '#5a0008'], slam: true }, { txt: F.a.ch.fatal.name, s: 1, col: '#ffd0c0' }], 120); Sound.play('gong'); Sound.say('Фаталити!', 'big'); this.redA = 0.6; this.impactCd = 0; this.shake(10); F.drip = true; }
     if (F.drip && F.t % 2 === 0 && Settings.blood) FX.p('blood', this.camX + W / 2 + rand(-90, 90), 120, 0, rand(0.2, 1), 90, choice(BLOOD_COLS), 1, 0.08);
     if (F.t >= F.sc.dur + 60) { this.dimT = 0.25; this.startVictory(F.a, true); }
   },
   phaseLogic() {
     const ph = this.phase, t = this.pt, [a, b] = this.f;
     if (ph === 'intro') {
-      if (t === 12) { this.announce([{ txt: 'РАУНД ' + this.round, s: 4, col: ['#fff3a0', '#ffb030', '#c05010'] }], 55); Sound.play('round'); if (!this.demo) Sound.say('Раунд ' + ['один', 'два', 'три', 'четыре', 'пять'][Math.min(4, this.round - 1)]); }
-      if (t === 72) { this.announce([{ txt: 'БОЙ!', s: 6, col: ['#ffffff', '#ffd040', '#e02010'] }], 45); Sound.play('gong'); if (!this.demo) Sound.say('Бой!'); }
+      if (t === 12) { this.announce([{ txt: 'РАУНД ' + this.round, s: 4, col: ['#fff3a0', '#ffb030', '#c05010'] }], 55); Sound.play('round'); if (!this.demo) Sound.say('Раунд ' + ['один', 'два', 'три', 'четыре', 'пять'][Math.min(4, this.round - 1)] + '!', 'name'); }
+      if (t === 72) { this.announce([{ txt: 'БОЙ!', s: 6, col: ['#ffffff', '#ffd040', '#e02010'] }], 45); Sound.play('gong'); if (!this.demo) Sound.say('Бой!', 'impact'); }
       if (t >= 80) { this.phase = 'fight'; this.pt = 0; if (!this.demo) YA.gameStart(); }
     } else if (ph === 'fight') {
       if (this.timer > 0 && ++this.tsub >= 60) { this.tsub = 0; this.timer--; if (this.timer === 0) this.timeUp(); }
     } else if (ph === 'ko') {
       if (this.loser.st === 'dead' && !this.koT) this.koT = t;
-      if (t === 40) { const w = this.winner; this.announce([{ txt: w.ch.name, s: 3, col: ['#fff3a0', '#ffb030'] }, { txt: 'ПОБЕЖДАЕТ', s: 2, col: '#ffffff' }].concat(w.roundDmg === 0 ? [{ txt: 'БЕЗУПРЕЧНАЯ ПОБЕДА', s: 2, col: ['#a0f0ff', '#3a8ad8'] }] : []), 110); if (!this.demo) Sound.say(w.ch.name + ' побеждает'); }
+      if (t === 40) { const w = this.winner; this.announce([{ txt: w.ch.name, s: 3, col: ['#fff3a0', '#ffb030'] }, { txt: 'ПОБЕЖДАЕТ', s: 2, col: '#ffffff' }].concat(w.roundDmg === 0 ? [{ txt: 'БЕЗУПРЕЧНАЯ ПОБЕДА', s: 2, col: ['#a0f0ff', '#3a8ad8'] }] : []), 110); if (!this.demo) Sound.say(w.ch.name + '... побеждает!', 'name'); }
       if (t > 60 && this.winner.canAct()) { this.winner.setSt('victory'); }
       if (t >= 170) { this.round++; this.startRound(); }
     } else if (ph === 'drawWait') {
       if (t >= 120) { this.round++; this.startRound(); }
     } else if (ph === 'finishWait') {
-      if (this.loser.st === 'dizzy') { this.phase = 'finish'; this.pt = 0; this.finishT = 6 * 60; const her = this.loser.ch.g === 'f'; this.announce([{ txt: her ? 'ДОБЕЙ ЕЁ!' : 'ДОБЕЙ ЕГО!', s: 4, col: ['#ffd0c0', '#e02010', '#7a0008'] }], 80); Sound.play('fatal'); if (!this.demo) Sound.say(her ? 'Добей её!' : 'Добей его!'); }
+      if (this.loser.st === 'dizzy') { this.phase = 'finish'; this.pt = 0; this.finishT = 6 * 60; const her = this.loser.ch.g === 'f'; this.announce([{ txt: her ? 'ДОБЕЙ ЕЁ!' : 'ДОБЕЙ ЕГО!', s: 4, col: ['#ffd0c0', '#e02010', '#7a0008'] }], 80); Sound.play('fatal'); if (!this.demo) Sound.say(her ? 'Добей её!' : 'Добей его!', 'big'); }
     } else if (ph === 'finish') {
       if (--this.finishT <= 0) { const l = this.loser; l.finishMe = false; l.dead = true; l.setSt('fall'); l.vy = -1; l.vx = 0; l.y = GROUND - 1; this.phase = 'finished'; this.pt = 0; }
     } else if (ph === 'finished') {
@@ -278,13 +310,13 @@ const Game = {
     else { loser.dead = true; loser.setSt('fall'); loser.vy = -1; loser.y = GROUND - 1; this.phase = 'ko'; this.pt = 0; }
   },
   startVictory(w, fatal) {
-    this.phase = 'victory'; this.pt = 0; this.winner = w; this.fat = null;
+    this.phase = 'victory'; this.pt = 0; this.winner = w; this.fat = null; this.banner = null;
     w.forcePose = null; w.hidden = false; w.alpha = 1; w.y = GROUND; w.setSt('victory'); w.jet = false;
     this.loser.forcePose = this.loser.hidden ? null : f => mkPose(POSES.lie);
     const flawless = w.hp >= 100;
     this.vic = { fatal, flawless };
     Sound.play('win'); setTimeout(() => this.phase === 'victory' && Sound.music('win'), 900);
-    if (!this.demo) Sound.say(w.ch.name + ' побеждает!');
+    if (!this.demo) Sound.say(w.ch.name + '... побеждает!', 'big');
     const humanWon = this.cfg.mode === '2p' ? true : !this.ai[w.idx];
     this.result = { winner: w, winnerIdx: w.idx, fatal, flawless, humanWon };
     if (!this.demo) { Store.set('wins', Store.get('wins', 0) + (humanWon && this.cfg.mode !== '2p' ? 1 : 0)); YA.gameStop(); }
@@ -321,6 +353,7 @@ const Game = {
     c.save(); c.translate(sx, sy);
     Stage.drawBg(c, cx, this.frame, this);
     if (this.dim > 0.01) { c.fillStyle = `rgba(6,0,10,${this.dim})`; c.fillRect(-10, -10, W + 20, H + 20); }
+    if (this.cine > 0.02) { c.fillStyle = `rgba(110,0,12,${0.38 * this.cine})`; c.fillRect(-10, -10, W + 20, H + 20); }
     FX.drawDecals(c, cx);
     for (const f of this.f) if (!f.hidden && f.alpha > 0.1) { const hgt = GROUND - f.y, w = Math.max(6, 22 - hgt * 0.1); c.globalAlpha = 0.35; c.fillStyle = '#000'; c.fillRect(Math.round(f.x - cx - w / 2), GROUND - 1, Math.round(w), 3); c.fillRect(Math.round(f.x - cx - w / 2 + 2), GROUND - 2, Math.round(w - 4), 5); c.globalAlpha = 1; }
     if (this.phase === 'victory' && this.winner) this.drawRays(c, cx);
@@ -340,7 +373,60 @@ const Game = {
       const z = this.zoom, vw = W / z, vh = H / z, x0 = clamp(this.zx - vw / 2, 0, W - vw), y0 = clamp(this.zy - vh / 2, 0, H - vh);
       ctx.drawImage(this.scene, x0, y0, vw, vh, 0, 0, W, H);
     } else ctx.drawImage(this.scene, 0, 0);
+    if (this.impactT > 0) this.drawImpact(ctx);
+    if (this.redA > 0) { ctx.globalAlpha = this.redA; ctx.fillStyle = '#c00010'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    if (this.cine > 0.02) this.drawCine(ctx);
+    if (this.splats.length) this.drawSplats(ctx);
+    if (this.phase === 'fatality') { this.drawAnn(ctx); return; }
     if (!this.demo) this.drawHUD(ctx); else this.drawDemoHUD(ctx);
+  },
+  drawImpact(ctx) {
+    const img = ctx.getImageData(0, 0, W, H), d = img.data, inv = this.impactT <= 3;
+    for (let i = 0; i < d.length; i += 4) {
+      const l = (d[i] * 3 + d[i + 1] * 4 + d[i + 2]) >> 3;
+      let r, g, b;
+      if (l > 150) { r = 255; g = 250; b = 235; } else if (l > 70) { r = 200; g = 0; b = 20; } else { r = 10; g = 0; b = 4; }
+      if (inv) { r = 255 - r; g = 255 - g; b = 255 - b; if (l > 70 && l <= 150) { r = 255; g = 230; b = 60; } }
+      d[i] = r; d[i + 1] = g; d[i + 2] = b;
+    }
+    ctx.putImageData(img, 0, 0);
+    // радиальные линии скорости
+    const F = this.fat; if (!F) return;
+    const z = this.zoom, vw = W / z, vh = H / z, x0 = clamp(this.zx - vw / 2, 0, W - vw), y0 = clamp(this.zy - vh / 2, 0, H - vh);
+    const cx = (F.v.x - this.camX - x0) * z, cy = (F.v.y - 40 - y0) * z;
+    ctx.fillStyle = inv ? '#000000' : '#ffffff';
+    for (let i = 0; i < 40; i++) { const a = rand(0, 6.283), r0 = rand(60, 120), r1 = r0 + rand(60, 200); for (let r = r0; r < r1; r += 2) ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1 + (r > r0 + 40 ? 1 : 0), 1); }
+  },
+  drawCine(ctx) {
+    const k = this.cine, bh = Math.round(24 * k);
+    // виньетка
+    const g = ctx.createRadialGradient(W / 2, H / 2, 60, W / 2, H / 2, 280); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(30,0,0,${0.75 * k})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bh); ctx.fillRect(0, H - bh, W, bh);
+    ctx.fillStyle = '#5a0008'; ctx.fillRect(0, bh, W, 1); ctx.fillRect(0, H - bh - 1, W, 1);
+    const B = this.banner;
+    if (B && B.t < 70) {
+      const t = B.t, slide = t < 10 ? easeOut(t / 10) : t > 56 ? 1 - easeIn((t - 56) / 14) : 1, off = Math.round((1 - slide) * (t < 30 ? -W : W));
+      const y = 92;
+      ctx.save(); ctx.translate(off, 0);
+      ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.beginPath(); ctx.moveTo(0, y - 18); ctx.lineTo(W, y - 30); ctx.lineTo(W, y + 26); ctx.lineTo(0, y + 38); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = B.col; ctx.fillRect(0, y + 36, W, 1); ctx.fillRect(0, y - 20, W, 1);
+      drawText(ctx, 'ПОСЛЕДНИЙ ПРИЁМ: ' + B.name.toUpperCase(), W / 2, y - 6, 1, '#ffd0c0');
+      drawText(ctx, B.fat.toUpperCase(), W / 2 + (t < 14 ? rand(-2, 2) : 0), y + 14, 3, ['#ffe0d0', '#ff3a2a', '#6a0008']);
+      ctx.restore();
+    }
+  },
+  drawSplats(ctx) {
+    for (const sp of this.splats) {
+      const a = sp.t > sp.life - 60 ? (sp.life - sp.t) / 60 : 1, k = Math.min(1, sp.t / 3);
+      ctx.globalAlpha = 0.85 * a;
+      for (const dr of sp.drips) { ctx.fillStyle = '#6a0008'; const dx = Math.round(sp.x + dr.dx * sp.r); ctx.fillRect(dx - 1, Math.round(sp.y), 3, Math.round(dr.len)); pdisk(ctx, dx, Math.round(sp.y + dr.len), 2, '#6a0008'); }
+      pdisk(ctx, sp.x, sp.y, sp.r * k, '#6a0008');
+      for (const [dx, dy, r] of sp.dots) pdisk(ctx, Math.round(sp.x + dx * sp.r * k), Math.round(sp.y + dy * sp.r * k), r * (dx * dx + dy * dy > 3 ? 0.6 : 1), '#6a0008');
+      pdisk(ctx, sp.x - sp.r * 0.3, sp.y - sp.r * 0.3, sp.r * 0.45 * k, '#a8101c');
+      ctx.fillStyle = '#ff8a8a'; ctx.fillRect(Math.round(sp.x - sp.r * 0.45), Math.round(sp.y - sp.r * 0.5), 2, 1);
+    }
+    ctx.globalAlpha = 1;
   },
   drawRays(c, cx) {
     const w = this.winner, x = w.x - cx, y = w.y - 40, t = this.pt, k = clamp(t / 40, 0, 1);
@@ -402,7 +488,7 @@ const Game = {
     ctx.globalAlpha = fade;
     for (const L of A.lines) {
       const sp = textSprite(L.txt, L.s, L.col, '#000', '#000');
-      const k = A.t < 6 ? 1 + (6 - A.t) * 0.12 : 1, sw = Math.round(sp.width * k), sh = Math.round(sp.height * k);
+      const k = L.slam ? (A.t < 10 ? 1 + (10 - A.t) * 0.3 : 1) : A.t < 6 ? 1 + (6 - A.t) * 0.12 : 1, sw = Math.round(sp.width * k), sh = Math.round(sp.height * k);
       let s = L.s; while (sw > W - 10 && s > 1) { s--; break; }
       if (sp.width > W - 8) { const sp2 = textSprite(L.txt, Math.max(1, L.s - 2), L.col); ctx.drawImage(sp2, Math.round(W / 2 - sp2.width / 2), Math.round(y)); y += sp2.height + 2; continue; }
       ctx.drawImage(sp, Math.round(W / 2 - sw / 2), Math.round(y + (sp.height - sh) / 2), sw, sh); y += sp.height + 2;

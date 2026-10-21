@@ -33,8 +33,8 @@ const UI = {
   cur: null, prev: null, focus: 0, items: [], S: {},
   init() {
     this.root = document.getElementById('ui');
-    for (const k of ['menu', 'select', 'tower', 'moves', 'controls', 'settings', 'pause', 'result', 'ending']) { const e = el('div', 'scr', this.root); e.id = 's-' + k; this.S[k] = { el: e }; }
-    this.buildMenu(); this.buildSelect(); this.buildMoves(); this.buildControls(); this.buildSettings(); this.buildPause();
+    for (const k of ['menu', 'modes', 'select', 'tower', 'moves', 'controls', 'settings', 'pause', 'result', 'ending']) { const e = el('div', 'scr', this.root); e.id = 's-' + k; this.S[k] = { el: e }; }
+    this.buildMenu(); this.buildModes(); this.buildSelect(); this.buildMoves(); this.buildControls(); this.buildSettings(); this.buildPause();
     this.buildTouch();
     document.getElementById('game').addEventListener('pointerdown', () => { if (Game.phase === 'victory' && !Game.demo && Game.pt > 120 && !this.cur) Game.endMatch(); });
   },
@@ -82,14 +82,102 @@ const UI = {
     logo.appendChild(pxCanvas('КОМБАТ', 5, ['#ffffff', '#ffd040', '#a04010']));
     logo.appendChild(pxCanvas('ПИКСЕЛЬНЫЙ ФАЙТИНГ С ФАТАЛИТИ', 1, '#ffd0c0'));
     const col = el('div', 'menu-col', e);
-    this.btn(col, 'БАШНЯ', () => this.startSelect('tower'));
-    this.btn(col, 'БОЙ С БОТОМ', () => this.startSelect('cpu'));
-    this.btn(col, 'ДВА ИГРОКА', () => this.startSelect('2p'));
+    this.btn(col, 'ИГРАТЬ', () => this.showModes(null));
     this.btn(col, 'СПИСОК УДАРОВ', () => this.show('moves'));
     this.btn(col, 'УПРАВЛЕНИЕ', () => this.show('controls'));
     this.btn(col, 'НАСТРОЙКИ', () => this.show('settings'));
     S.stats = el('div', 'stats', e);
     S.onShow = () => { S.stats.innerHTML = ''; S.stats.appendChild(pxCanvas('ПОБЕД: ' + Store.get('wins', 0) + '    ФАТАЛИТИ: ' + Store.get('fatalities', 0), 1, '#c0a0a0')); };
+  },
+  // ---------- выбор режима (из меню и после каждого боя) ----------
+  buildModes() {
+    const S = this.S.modes, e = S.el;
+    S.head = el('div', 'mhead2', e);
+    const row = el('div', 'mcards', e); S.cards = [];
+    const defs = [['tower', 'БАШНЯ', '6 БОЁВ ПОДРЯД И БОСС'], ['cpu', 'БОЙ С БОТОМ', 'ОДИН НА ОДИН С КОМПЬЮТЕРОМ'], ['2p', 'ДВА ИГРОКА', 'НА ОДНОЙ КЛАВИАТУРЕ']];
+    for (const [mode, name, desc] of defs) {
+      const c = el('div', 'btn mcard', row); c._mode = mode;
+      const [cv] = mkCanvas(128, 96); cv.className = 'px mart'; c.appendChild(cv); c._cv = cv;
+      c.appendChild(pxCanvas(name, 2, ['#fff6d0', '#ffc040']));
+      c.appendChild(pxCanvas(desc, 1, '#d0b8b0', 124, 'center'));
+      c.onclick = e2 => { if (e2) e2.stopPropagation(); Sound.init(); Sound.play('select'); this.pickMode(mode); };
+      c.onpointerenter = () => { const i = this.items.indexOf(c); if (i >= 0 && i !== this.focus) this.setFocus(i); };
+      S.cards.push(c);
+    }
+    S.btns = el('div', 'mbtns', e);
+    S.R = new Raster(SPR_W, SPR_H); S.t = 0;
+    S.tick = () => this.modesTick();
+  },
+  // r — результат матча (или null, если открыто из меню)
+  showModes(r) {
+    const S = this.S.modes; S.res = r;
+    S.head.innerHTML = ''; S.btns.innerHTML = '';
+    if (r) {
+      S.head.appendChild(pxCanvas(r.title, 3, r.col, 0, 'center'));
+      S.head.appendChild(pxCanvas(r.sub || 'ВЫБЕРИ РЕЖИМ ДЛЯ СЛЕДУЮЩЕГО БОЯ', 1, r.sub ? '#ff8a7a' : '#d0c0c0', 0, 'center'));
+      for (const [label, fn] of r.actions) this.btn(S.btns, label, fn);
+    } else {
+      S.head.appendChild(pxCanvas('ВЫБЕРИ РЕЖИМ', 3, ['#fff6c0', '#ffb030'], 0, 'center'));
+      this.btn(S.btns, 'НАЗАД', () => this.show('menu'));
+    }
+    S.back = r ? null : () => this.show('menu');
+    S.defFocus = 0;
+    this.show('modes');
+    Sound.sting('swell');
+  },
+  pickMode(mode) {
+    const S = this.S.modes;
+    if (S.res) YA.showAd(() => { Game.paused = false; Sound.mute('pause', false); YA.gameStop(); Game.startDemo(); this.startSelect(mode); });
+    else this.startSelect(mode);
+  },
+  modesTick() {
+    const S = this.S.modes, t = ++S.t, R = S.R;
+    const p1 = CHARS[Store.get('last1', 0)] || CHARS[0], p2 = CHARS[Store.get('last2', 6)] || CHARS[6];
+    const fighter = (c, ch, x, gy, flip, pose, opt) => {
+      renderFighter(R, ch, pose, Object.assign({ anim: t }, opt || {}));
+      c.save(); c.translate(x, gy); if (flip) c.scale(-1, 1); c.drawImage(R.cv, -SPR_OX, -SPR_OY); c.restore();
+    };
+    for (const card of S.cards) {
+      const c = card._cv.getContext('2d'), W2 = 128, H2 = 96, foc = card.classList.contains('foc');
+      c.imageSmoothingEnabled = false;
+      if (card._mode === 'tower') {
+        ditherV(c, 0, 0, W2, H2, ['#120820', '#3a1440', '#a0401a']);
+        // луна и звёзды
+        pdisk(c, 100, 18, 9, '#ffe8b0'); pdisk(c, 103, 16, 8, '#3a1440');
+        for (let i = 0; i < 14; i++) { if ((i * 7 + (t >> 4)) % 5) { c.fillStyle = '#fff6d0'; c.fillRect((i * 37) % W2, (i * 23) % 40, 1, 1); } }
+        // башня
+        const tx = 74;
+        c.fillStyle = '#1a0c18'; c.fillRect(tx - 15, 22, 30, 74); c.fillRect(tx - 19, 18, 38, 6);
+        for (let i = -19; i < 19; i += 6) c.fillRect(tx + i, 13, 4, 5);
+        c.fillStyle = '#2e1828'; for (let y = 26; y < 96; y += 6) for (let x = tx - 14 + ((y / 6) & 1) * 4; x < tx + 13; x += 8) c.fillRect(x, y, 6, 1);
+        for (let i = 0; i < 4; i++) { const on = ((t >> 3) + i) % 7 !== 0; c.fillStyle = on ? '#ffc040' : '#5a2a10'; c.fillRect(tx - 3, 30 + i * 15, 6, 8); c.fillStyle = on ? '#fff3a0' : '#3a1a10'; c.fillRect(tx - 2, 31 + i * 15, 2, 3); }
+        // пламя на вершине
+        for (let i = 0; i < 6; i++) { const fx = tx + Math.sin(t * 0.3 + i) * 5, fy = 10 - ((t * 0.7 + i * 5) % 14); c.fillStyle = ['#fff3a0', '#ffb030', '#ff5a1a', '#c01010'][i % 4]; c.fillRect(Math.round(fx), Math.round(fy), 3, 3); }
+        if (t % 90 < 4) { bolt(c, tx + 30, 0, tx + 8, 18, '#e0f0ff', 6, 6, 1); }
+        c.fillStyle = '#0c0610'; c.fillRect(0, 90, W2, 6);
+        fighter(c, p1, 30, 92, false, ANIM.idle(p1, t));
+      } else if (card._mode === 'cpu') {
+        ditherV(c, 0, 0, W2, H2, ['#0a0612', '#2a0a14', '#5a1010']);
+        c.globalAlpha = 0.25; c.fillStyle = '#ff2a2a'; for (let y = 0; y < H2; y += 4) c.fillRect(0, y + ((t >> 1) % 4), W2, 1); c.globalAlpha = 1;
+        c.fillStyle = '#140608'; c.fillRect(0, 88, W2, 8);
+        const op = CHARS[(Math.floor(t / 80) + 3) % CHARS.length];
+        fighter(c, p1, 34, 90, false, ANIM.idle(p1, t));
+        fighter(c, op, 94, 90, true, ANIM.idle(op, t + 20), { tint: 'shadow', tintK: 0.92 });
+        // горящие глаза бота
+        const blink = (t % 70) < 3; if (!blink) { c.fillStyle = '#ff3a2a'; c.fillRect(88, 31, 3, 1); c.fillRect(93, 31, 3, 1); c.globalAlpha = 0.4; c.fillRect(86, 30, 12, 3); c.globalAlpha = 1; }
+        c.fillStyle = '#1a2a1a'; c.fillRect(100, 4, 24, 12); c.fillStyle = '#3aff6a'; drawText(c, 'CPU', 112, 10, 1, '#3aff6a');
+      } else {
+        // два игрока: диагональ огня и льда
+        for (let y = 0; y < H2; y++) { const sp = 64 + (y - 48) * 0.4; c.fillStyle = '#3a1008'; c.fillRect(0, y, Math.round(sp), 1); c.fillStyle = '#081a3a'; c.fillRect(Math.round(sp), y, W2 - Math.round(sp), 1); }
+        c.globalAlpha = 0.5; for (let i = 0; i < 10; i++) { c.fillStyle = '#ff6a1a'; c.fillRect((i * 13 + t) % 64, 90 - ((i * 29 + t * 2) % 90), 1, 2); c.fillStyle = '#4ad0ff'; c.fillRect(64 + (i * 17 + t) % 64, 90 - ((i * 31 + t * 2) % 90), 1, 2); } c.globalAlpha = 1;
+        c.fillStyle = '#0a060a'; c.fillRect(0, 88, W2, 8);
+        fighter(c, p1, 36, 90, false, ANIM.idle(p1, t));
+        fighter(c, p2, 92, 90, true, ANIM.idle(p2, t + 15));
+        const k = 1 + Math.sin(t * 0.15) * 0.1; drawText(c, 'VS', 64, 50, k > 1.05 ? 3 : 2, ['#ffffff', '#ffd040', '#e02010']);
+        drawText(c, 'P1', 10, 8, 1, '#ff9a7a'); drawText(c, 'P2', 118, 8, 1, '#8ad0ff');
+      }
+      if (!foc) { c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(0, 0, W2, H2); }
+    }
   },
   // ---------- выбор бойца ----------
   buildSelect() {
@@ -126,7 +214,8 @@ const UI = {
     S.cur = [Store.get('last1', 0), Store.get('last2', 6)]; S.lock = [false, false]; S.step = 0; S.t = 0; S.rnd = [null, null];
     S.title.innerHTML = ''; S.title.appendChild(pxCanvas(mode === 'tower' ? 'БАШНЯ: ВЫБЕРИ БОЙЦА' : mode === '2p' ? 'ДВА ИГРОКА' : 'БОЙ С БОТОМ', 3, ['#fff6c0', '#ffb030']));
     S.hint.innerHTML = '';
-    S.hint.appendChild(pxCanvas(mode === '2p' ? 'ИГРОК 1: WASD + F. ИГРОК 2: СТРЕЛКИ + K.' : 'СТРЕЛКИ ИЛИ WASD - ВЫБОР. ENTER ИЛИ F - ПОДТВЕРДИТЬ.', 1, '#c0b0b0', 200, 'center'));
+    const K1 = KEYS[0], K2 = KEYS[1], dirs = K => keyName(K.u) + keyName(K.l) + keyName(K.d) + keyName(K.r);
+    S.hint.appendChild(pxCanvas(mode === '2p' ? 'ИГРОК 1: ' + dirs(K1) + ' + ' + keyName(K1.p) + '. ИГРОК 2: ' + dirs(K2) + ' + ' + keyName(K2.p) + '.' : 'СТРЕЛКИ ИЛИ ' + dirs(K1) + ' - ВЫБОР. ENTER ИЛИ ' + keyName(K1.p) + ' - ПОДТВЕРДИТЬ.', 1, '#c0b0b0', 200, 'center'));
     S.side[1].style.visibility = mode === 'tower' ? 'hidden' : 'visible';
     this.show('select');
     this.selRefresh();
@@ -144,7 +233,7 @@ const UI = {
     let i = S.cur[p];
     if (i === 10) { i = randi(0, 9); S.rnd[p] = i; } else S.rnd[p] = null;
     S.lock[p] = true; S.pick = S.pick || []; S.pick[p] = CHARS[i];
-    Sound.play('select'); Sound.say(CHARS[i].name);
+    Sound.play('select'); Sound.say(CHARS[i].name + '!', 'name');
     Store.set(p ? 'last2' : 'last1', S.cur[p]);
     if (this.mode === 'tower') { this.startTower(CHARS[i]); return; }
     if (this.mode === 'cpu' && p === 0) { S.step = 1; if (S.cur[1] === S.cur[0]) S.cur[1] = (S.cur[0] + 1) % 10; }
@@ -166,9 +255,11 @@ const UI = {
   },
   selInput(raw) {
     const two = this.mode === '2p', S = this.S.select;
-    const P1 = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0], 'P0:up': [0, -1], 'P0:down': [0, 1], 'P0:left': [-1, 0], 'P0:right': [1, 0] };
-    const P2 = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], 'P1:up': [0, -1], 'P1:down': [0, 1], 'P1:left': [-1, 0], 'P1:right': [1, 0] };
-    const OK1 = ['KeyF', 'KeyG', 'Space', 'P0:ok'], OK2 = ['KeyK', 'KeyL', 'Enter', 'NumpadEnter', 'Numpad1', 'P1:ok'];
+    const K1 = KEYS[0], K2 = KEYS[1];
+    const P1 = { [K1.u]: [0, -1], [K1.d]: [0, 1], [K1.l]: [-1, 0], [K1.r]: [1, 0], 'P0:up': [0, -1], 'P0:down': [0, 1], 'P0:left': [-1, 0], 'P0:right': [1, 0] };
+    const P2 = { [K2.u]: [0, -1], [K2.d]: [0, 1], [K2.l]: [-1, 0], [K2.r]: [1, 0], 'P1:up': [0, -1], 'P1:down': [0, 1], 'P1:left': [-1, 0], 'P1:right': [1, 0] };
+    if (!two) Object.assign(P1, { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] });
+    const OK1 = [K1.p, K1.k, 'Space', 'P0:ok'], OK2 = [K2.p, K2.k, 'Enter', 'NumpadEnter', 'Numpad1', 'P1:ok'];
     for (const k of raw) {
       let p = null, d = null, ok = false;
       if (P1[k]) { p = 0; d = P1[k]; } else if (P2[k]) { p = 1; d = P2[k]; } else if (OK1.includes(k)) { p = 0; ok = true; } else if (OK2.includes(k)) { p = 1; ok = true; }
@@ -241,30 +332,31 @@ const UI = {
   // ---------- результат ----------
   showResult() {
     const r = Game.result; if (!r || r.shown) return; r.shown = true;
-    const S = this.S.result, e = S.el; e.innerHTML = '';
     const cfg = Game.cfg, mode = cfg.mode;
     let title, col;
     if (mode === '2p') { title = 'ИГРОК ' + (r.winnerIdx + 1) + ' ПОБЕДИЛ!'; col = ['#fff6c0', '#ffb030']; }
     else if (r.humanWon) { title = 'ПОБЕДА!'; col = ['#a8ffb0', '#22a034']; }
     else { title = 'ПОРАЖЕНИЕ'; col = ['#ffd0c0', '#c01010']; }
-    const box = el('div', 'rbox', e);
-    box.appendChild(pxCanvas(title, 4, col, 0, 'center'));
-    if (r.fatal) box.appendChild(pxCanvas('ФАТАЛИТИ: ' + r.winner.ch.fatal.name, 1, '#ff8a7a', 0, 'center'));
-    const bc = el('div', 'menu-col', box);
-    if (mode === 'tower') {
-      const T = this.tower;
-      if (r.humanWon) {
-        T.idx++;
-        if (T.idx >= T.list.length) { Store.set('towers', Store.get('towers', 0) + 1); this.btn(bc, 'ФИНАЛ', () => this.showEnding()); }
-        else this.btn(bc, 'СЛЕДУЮЩИЙ БОЙ', () => YA.showAd(() => this.showTower()));
-      } else this.btn(bc, 'ПОВТОРИТЬ БОЙ', () => this.launch(Object.assign({}, cfg)));
-    } else {
-      this.btn(bc, 'РЕВАНШ', () => this.launch(Object.assign({}, cfg, { stage: null })));
-      this.btn(bc, 'ДРУГИЕ БОЙЦЫ', () => YA.showAd(() => this.startSelect(mode)));
+    const sub = r.fatal ? 'ФАТАЛИТИ: ' + r.winner.ch.fatal.name : null;
+    if (mode === 'tower' && r.humanWon) {
+      const T = this.tower; T.idx++;
+      const S = this.S.result, e = S.el; e.innerHTML = '';
+      const box = el('div', 'rbox', e);
+      box.appendChild(pxCanvas(title, 4, col, 0, 'center'));
+      if (sub) box.appendChild(pxCanvas(sub, 1, '#ff8a7a', 0, 'center'));
+      const bc = el('div', 'menu-col', box);
+      if (T.idx >= T.list.length) { Store.set('towers', Store.get('towers', 0) + 1); this.btn(bc, 'ФИНАЛ', () => this.showEnding()); }
+      else this.btn(bc, 'СЛЕДУЮЩИЙ БОЙ', () => YA.showAd(() => this.showTower()));
+      this.btn(bc, 'ГЛАВНОЕ МЕНЮ', () => YA.showAd(() => this.toMenu()));
+      S.back = null;
+      this.show('result');
+      return;
     }
-    this.btn(bc, 'ГЛАВНОЕ МЕНЮ', () => YA.showAd(() => this.toMenu()));
-    S.back = null;
-    this.show('result');
+    const actions = mode === 'tower'
+      ? [['ПОВТОРИТЬ БОЙ', () => this.launch(Object.assign({}, cfg))]]
+      : [['РЕВАНШ', () => this.launch(Object.assign({}, cfg, { stage: null }))], ['ДРУГИЕ БОЙЦЫ', () => YA.showAd(() => { Game.startDemo(); this.startSelect(mode); })]];
+    actions.push(['ГЛАВНОЕ МЕНЮ', () => YA.showAd(() => this.toMenu())]);
+    this.showModes({ title, col, sub, actions });
   },
   showEnding() {
     const S = this.S.ending, e = S.el; e.innerHTML = '';
@@ -274,8 +366,8 @@ const UI = {
     box.appendChild(pxCanvas(this.tower.ch.name + ' ПРОШЁЛ БАШНЮ ИСПЫТАНИЙ И СТАЛ ЛЕГЕНДОЙ КОМБАТА!', 1, '#ffe8c0', 260, 'center'));
     box.appendChild(pxCanvas('ПРОЙДЕНО БАШЕН: ' + Store.get('towers', 1), 1, '#c0a0a0', 0, 'center'));
     const bc = el('div', 'menu-col', box);
-    this.btn(bc, 'ГЛАВНОЕ МЕНЮ', () => YA.showAd(() => this.toMenu()));
-    Sound.play('win'); Sound.say('Безупречно! Ты чемпион!');
+    this.btn(bc, 'ДАЛЬШЕ', () => YA.showAd(() => { Game.startDemo(); this.showModes({ title: 'ЧЕМПИОН!', col: ['#ffffff', '#ffd040', '#c06010'], sub: null, actions: [['ГЛАВНОЕ МЕНЮ', () => this.toMenu()]] }); }));
+    Sound.play('win'); Sound.say('Безупречно! Ты... чемпион!', 'big');
     this.show('ending');
   },
   // ---------- пауза ----------
@@ -335,10 +427,10 @@ const UI = {
     const sec = (t) => { const d = el('div', 'msec', L); d.appendChild(pxCanvas(t, 1, '#8ad0ff')); };
     const row = (name, inp, col = '#ffffff') => { const r = el('div', 'mrow', L); r.appendChild(pxCanvas(name, 1, col)); r.appendChild(pxCanvas(inp, 1, '#ffd040')); };
     sec('ОСОБЫЕ ПРИЁМЫ');
-    row(PROJ[ch.proj].name, '← → + РУКА  (R)');
-    row(DASH[ch.dash].name, '↓ → + НОГА  (T)');
+    row(PROJ[ch.proj].name, '← → + РУКА  (' + keyName(KEYS[0].sp1) + ')');
+    row(DASH[ch.dash].name, '↓ → + НОГА  (' + keyName(KEYS[0].sp2) + ')');
     sec('ФАТАЛИТИ (ВО ВРЕМЯ «ДОБЕЙ!», ВБЛИЗИ)');
-    row(ch.fatal.name, arr(ch.fatal.seq) + ' + ' + (ch.fatal.btn === 'p' ? 'РУКА' : 'НОГА') + '  (Y)', '#ff8a7a');
+    row(ch.fatal.name, arr(ch.fatal.seq) + ' + ' + (ch.fatal.btn === 'p' ? 'РУКА' : 'НОГА') + '  (' + keyName(KEYS[0].fat) + ')', '#ff8a7a');
     sec('БАЗОВЫЕ УДАРЫ');
     row('Удар рукой / серия', 'РУКА, РУКА');
     row('Удар ногой', 'НОГА');
@@ -357,12 +449,46 @@ const UI = {
     const S = this.S.controls, e = S.el;
     el('div', 'sel-title', e).appendChild(pxCanvas('УПРАВЛЕНИЕ', 3, ['#fff6c0', '#ffb030']));
     const tb = el('div', 'ctable', e);
-    const rows = [['ДЕЙСТВИЕ', 'ИГРОК 1', 'ИГРОК 2', 'ГЕЙМПАД'], ['ДВИЖЕНИЕ / ПРЫЖОК', 'W A S D', 'СТРЕЛКИ', 'КРЕСТОВИНА'], ['РУКА', 'F', 'K / NUM1', 'X / Y'], ['НОГА', 'G', 'L / NUM2', 'A'], ['БЛОК', 'H', '; / NUM3', 'B / RT'], ['СНАРЯД', 'R', 'O / NUM4', 'LB'], ['РЫВОК', 'T', 'P / NUM5', 'RB'], ['ФАТАЛИТИ', 'Y', 'I / NUM6', '—'], ['ПАУЗА', 'ESC', 'ESC', 'START']];
-    rows.forEach((r, i) => { const tr = el('div', 'crow' + (i ? '' : ' chead'), tb); r.forEach((c, j) => { const td = el('div', 'ccell', tr); td.appendChild(pxCanvas(c, 1, i === 0 ? '#8ad0ff' : j === 0 ? '#ffffff' : '#ffd040')); }); });
-    const n = el('div', 'cnote', e);
-    n.appendChild(pxCanvas('В ОДИНОЧНОЙ ИГРЕ РАБОТАЮТ ОБЕ РАСКЛАДКИ. НА ТЕЛЕФОНЕ — ЭКРАННЫЕ КНОПКИ.', 1, '#c0b0b0', 380, 'center'));
-    const bb = el('div', 'backbtn', e); this.btn(bb, 'НАЗАД', () => this.backTo());
+    const names = { l: 'ВЛЕВО', r: 'ВПРАВО', u: 'ПРЫЖОК', d: 'ПРИСЕД', p: 'РУКА', k: 'НОГА', b: 'БЛОК', sp1: 'СНАРЯД', sp2: 'РЫВОК', fat: 'ФАТАЛИТИ' };
+    const pad = { l: 'КРЕСТ ←', r: 'КРЕСТ →', u: 'КРЕСТ ↑', d: 'КРЕСТ ↓', p: 'X / Y', k: 'A', b: 'B / RT', sp1: 'LB', sp2: 'RB', fat: '—' };
+    const head = el('div', 'crow chead', tb);
+    for (const h of ['ДЕЙСТВИЕ', 'ИГРОК 1', 'ИГРОК 2', 'ГЕЙМПАД']) el('div', 'ccell', head).appendChild(pxCanvas(h, 1, '#8ad0ff'));
+    S.cells = [];
+    for (const act of ACTIONS) {
+      const tr = el('div', 'crow', tb);
+      el('div', 'ccell', tr).appendChild(pxCanvas(names[act], 1, '#ffffff'));
+      for (const pl of [0, 1]) {
+        const b = el('div', 'btn kbtn', tr); b._pl = pl; b._act = act; S.cells.push(b);
+        b.onclick = ev => { if (ev) ev.stopPropagation(); Sound.init(); this.ctlCapture(b); };
+        b.onpointerenter = () => { const i = this.items.indexOf(b); if (i >= 0) this.setFocus(i); };
+      }
+      el('div', 'ccell', tr).appendChild(pxCanvas(pad[act], 1, '#a898a8'));
+    }
+    S.note = el('div', 'cnote', e);
+    const bb = el('div', 'backbtn crow2', e);
+    this.btn(bb, 'ПО УМОЛЧАНИЮ', () => { resetKeys(); this.ctlRefresh(); });
+    this.btn(bb, 'НАЗАД', () => this.backTo());
     S.back = () => this.backTo();
+    S.onShow = () => this.ctlRefresh();
+  },
+  ctlRefresh(waiting) {
+    const S = this.S.controls;
+    for (const b of S.cells) {
+      b.innerHTML = '';
+      const w = b === waiting;
+      b.classList.toggle('wait', w);
+      b.appendChild(pxCanvas(w ? 'НАЖМИ...' : keyName(KEYS[b._pl][b._act]), 1, w ? '#ff8a6a' : '#ffd040'));
+    }
+    S.note.innerHTML = '';
+    S.note.appendChild(pxCanvas(waiting ? 'НАЖМИ НОВУЮ КЛАВИШУ. ESC - ОТМЕНА.' : 'ВЫБЕРИ КЛЕТКУ И НАЖМИ ENTER ИЛИ КЛИКНИ, ЧТОБЫ НАЗНАЧИТЬ КЛАВИШУ.', 1, waiting ? '#ffd0c0' : '#c0b0b0', 400, 'center'));
+  },
+  ctlCapture(b) {
+    this.ctlRefresh(b);
+    Input.capture = code => {
+      if (code !== 'Escape') { bindKey(b._pl, b._act, code); Sound.play('select'); } else Sound.play('back');
+      Input.menuQ = []; Input.rawQ = [];
+      this.ctlRefresh();
+    };
   },
   // ---------- настройки ----------
   buildSettings() {

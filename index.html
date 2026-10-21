@@ -17,7 +17,7 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #s-menu{background:linear-gradient(90deg,rgba(0,0,0,.8),rgba(0,0,0,.45) 40%,rgba(0,0,0,0) 60%)}
 #s-menu .menu-col{left:3em;transform:none;top:10em;min-width:14em;gap:.25em}
 #s-menu .btn{padding:.1em 1em;border-width:.15em}
-#s-select,#s-tower,#s-moves,#s-controls,#s-settings,#s-ending{background:radial-gradient(ellipse at center,rgba(40,8,20,.82),rgba(5,2,8,.96))}
+#s-modes,#s-select,#s-tower,#s-moves,#s-controls,#s-settings,#s-ending{background:radial-gradient(ellipse at center,rgba(40,8,20,.82),rgba(5,2,8,.96))}
 #s-pause,#s-result{background:rgba(0,0,0,.55)}
 .logo{position:absolute;left:2em;top:.5em;display:flex;flex-direction:column;align-items:center;gap:.2em;filter:drop-shadow(0 0 .4em rgba(255,80,20,.6))}
 .menu-col{position:absolute;left:50%;top:12.6em;transform:translateX(-50%);display:flex;flex-direction:column;align-items:stretch;gap:.35em;min-width:15em}
@@ -62,10 +62,15 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 .mhead{display:flex;flex-direction:column;gap:.2em;margin-bottom:.2em}
 .msec{margin-top:.25em;border-bottom:.1em solid #3a4a6a;padding-bottom:.1em}
 .mrow{display:flex;justify-content:space-between;gap:1em;padding:.05em .3em;background:rgba(255,255,255,.04)}
-.ctable{position:absolute;left:50%;top:4em;transform:translateX(-50%);display:flex;flex-direction:column;gap:.15em}
-.crow{display:grid;grid-template-columns:10em 6em 7em 7em;gap:.3em;padding:.25em .5em;background:rgba(255,255,255,.05)}
+.ctable{position:absolute;left:50%;top:3.6em;transform:translateX(-50%);display:flex;flex-direction:column;gap:.1em}
+.crow{display:grid;grid-template-columns:8em 7em 7em 6em;gap:.3em;padding:.1em .5em;background:rgba(255,255,255,.05);align-items:center}
+.crow .ccell{display:flex;align-items:center}
+.kbtn{padding:0 .3em;border-width:.1em;height:1.2em;box-sizing:border-box}
+.kbtn.wait{border-color:#ff6a3a;background:linear-gradient(#7a1a10,#3a0808);animation:blink .5s steps(2) infinite}
+@keyframes blink{50%{border-color:#ffd040}}
+.backbtn.crow2{left:50%;transform:translateX(-50%);display:flex;gap:.6em;bottom:.5em}
 .crow.chead{background:rgba(60,90,140,.3)}
-.cnote{position:absolute;left:0;right:0;bottom:3em;display:flex;justify-content:center}
+.cnote{position:absolute;left:0;right:0;bottom:3.3em;display:flex;justify-content:center}
 #touch{position:absolute;inset:0;display:none;pointer-events:none}
 #touch.on{display:block}
 .stick{position:absolute;left:1.2em;bottom:1.2em;width:8em;height:8em;border-radius:50%;background:rgba(255,255,255,.08);border:.2em solid rgba(255,255,255,.25);pointer-events:auto;touch-action:none}
@@ -83,6 +88,12 @@ canvas.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1em;background:#07040a;font-weight:bold;letter-spacing:.2em;color:#ffb030;font-size:2em}
 #loading .b{width:10em;height:.4em;background:#2a1018;border:2px solid #5a3040}
 #loadbar{height:100%;width:0;background:linear-gradient(90deg,#c01010,#ffd040)}
+.mhead2{position:absolute;top:.7em;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:.4em}
+.mcards{position:absolute;left:50%;top:5.4em;transform:translateX(-50%);display:flex;gap:1em}
+.mcard{flex-direction:column;gap:.5em;padding:.5em .5em .7em;width:13.4em;justify-content:flex-start}
+.mart{width:12.8em!important;height:9.6em!important;border:.1em solid #000}
+.mcard.foc{transform:translateY(-.3em)}
+.mbtns{position:absolute;left:50%;bottom:.9em;transform:translateX(-50%);display:flex;gap:.6em}
 </style>
 </head>
 <body>

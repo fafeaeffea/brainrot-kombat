@@ -86,14 +86,65 @@ const Sound = {
       }
     } catch (e) { }
   },
-  say(text) {
+  // ----- эпичный диктор: низкий голос + хор, удар и эхо под ним -----
+  voices: null,
+  pickVoice() {
+    if (!window.speechSynthesis) return null;
+    const vs = speechSynthesis.getVoices().filter(v => /^ru/i.test(v.lang));
+    if (!vs.length) return null;
+    const male = /pavel|dmitr|yuri|maxim|artem|ivan|boris|filipp|mikhail|male|муж|павел|дмитр|юр|максим|артём|иван/i;
+    return vs.find(v => male.test(v.name) && !/female|жен/i.test(v.name)) || vs.find(v => /google/i.test(v.name)) || vs[0];
+  },
+  ensureVerb() {
+    if (this.verb || !this.ctx) return this.verb;
+    const c = this.ctx, len = Math.floor(c.sampleRate * 2.6), buf = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
+    this.verb = c.createConvolver(); this.verb.buffer = buf;
+    const g = c.createGain(); g.gain.value = 0.55; this.verb.connect(g); g.connect(this.master);
+    return this.verb;
+  },
+  pad(freqs, dur, vol, delay = 0) {
+    const c = this.ctx, t = c.currentTime + delay, out = c.createGain(), lp = c.createBiquadFilter(), verb = this.ensureVerb();
+    lp.type = 'lowpass'; lp.frequency.setValueAtTime(400, t); lp.frequency.linearRampToValueAtTime(2200, t + dur * 0.3); lp.frequency.linearRampToValueAtTime(600, t + dur);
+    out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(vol, t + 0.12); out.gain.setValueAtTime(vol, t + dur * 0.55); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.connect(out); out.connect(this.sfx); if (verb) out.connect(verb);
+    for (const f of freqs) for (const det of [-9, 0, 9]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det; o.connect(lp); o.start(t); o.stop(t + dur + 0.05); }
+  },
+  sting(kind) {
+    if (!this.ctx || !Settings.sfx) return;
+    try {
+      const verb = this.ensureVerb();
+      if (kind === 'name') {
+        this.noise(0.5, 0.25, 3000, 'highpass', 0, 9000, verb);
+        this.tone(70, 1.2, 'sine', 0.8, 30); this.tone(140, 0.4, 'square', 0.15, 50); this.noise(0.4, 0.6, 500, 'lowpass', 0, 60);
+        this.pad([110, 164.8, 220, 261.6], 2.2, 0.05);
+      } else if (kind === 'big') {
+        this.tone(55, 1.8, 'sine', 0.9, 28); this.noise(0.8, 0.7, 700, 'lowpass', 0, 50); if (verb) this.noise(1.2, 0.4, 1500, 'lowpass', 0, 200, verb);
+        this.pad([73.4, 110, 146.8, 174.6, 220], 3, 0.06);
+      } else if (kind === 'heart') {
+        this.tone(60, 0.18, 'sine', 0.9, 35); this.tone(55, 0.2, 'sine', 0.7, 32, 0.22);
+      } else if (kind === 'impact') {
+        this.tone(45, 0.9, 'sine', 1, 25); this.noise(0.6, 0.9, 900, 'lowpass', 0, 60); if (verb) this.noise(0.9, 0.5, 2500, 'bandpass', 0, 300, verb);
+      } else if (kind === 'swell') {
+        const c = this.ctx, t = c.currentTime, s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain();
+        s.buffer = this.noiseBuf; s.loop = true; fl.type = 'bandpass'; fl.frequency.setValueAtTime(300, t); fl.frequency.exponentialRampToValueAtTime(5000, t + 1.1);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 1.05); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+        s.connect(fl); fl.connect(g); g.connect(this.sfx); if (verb) g.connect(verb); s.start(t); s.stop(t + 1.25);
+      }
+    } catch (e) { }
+  },
+  say(text, sting) {
+    if (sting) this.sting(sting === true ? 'name' : sting);
     if (!Settings.voice || this.muteReasons.size || !window.speechSynthesis) return;
     try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ru-RU'; u.rate = 0.85; u.pitch = 0.45; u.volume = 1;
-      const v = speechSynthesis.getVoices().find(v => /^ru/i.test(v.lang)); if (v) u.voice = v;
-      speechSynthesis.speak(u);
+      u.lang = 'ru-RU'; u.rate = 0.72; u.pitch = 0.05; u.volume = 1;
+      const v = this.pickVoice(); if (v) u.voice = v;
+      // музыка приглушается, пока говорит диктор
+      u.onstart = () => { if (this.mus && this.ctx) this.mus.gain.setTargetAtTime(Settings.music ? 0.1 : 0, this.ctx.currentTime, 0.05); };
+      u.onend = u.onerror = () => { if (this.mus && this.ctx) this.mus.gain.setTargetAtTime(Settings.music ? 0.32 : 0, this.ctx.currentTime, 0.3); };
+      setTimeout(() => { try { speechSynthesis.speak(u); } catch (e) { } }, sting ? 120 : 0);
     } catch (e) { }
   },
   // ----- музыка: простая трекерная схема -----

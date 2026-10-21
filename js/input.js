@@ -6,6 +6,7 @@ const Input = {
   init() {
     addEventListener('keydown', e => {
       if (this.GAME_KEYS.has(e.code)) e.preventDefault();
+      if (this.capture) { e.preventDefault(); if (!e.repeat) { const f = this.capture; this.capture = null; f(e.code); } return; }
       if (!e.repeat) this.keys[e.code] = true;
       this.anyKey = true;
       const m = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Enter: 'ok', Space: 'ok', NumpadEnter: 'ok', KeyF: 'ok', KeyK: 'ok2', Escape: 'back', Backspace: 'back', KeyP: 'pause' }[e.code];
@@ -37,8 +38,36 @@ const Input = {
   takeMenu() { const q = this.menuQ; this.menuQ = []; return q; },
   takeRaw() { const q = this.rawQ; this.rawQ = []; return q; }
 };
-const KEYMAP1 = { KeyA: 'l', KeyD: 'r', KeyW: 'u', KeyS: 'd', KeyF: 'p', KeyG: 'k', KeyH: 'b', KeyR: 'sp1', KeyT: 'sp2', KeyY: 'fat' };
-const KEYMAP2 = { ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'u', ArrowDown: 'd', KeyK: 'p', Numpad1: 'p', KeyL: 'k', Numpad2: 'k', Semicolon: 'b', Numpad3: 'b', KeyO: 'sp1', Numpad4: 'sp1', KeyP: 'sp2', Numpad5: 'sp2', KeyI: 'fat', Numpad6: 'fat' };
+// Раскладки можно переназначить в меню «Управление»; хранятся в localStorage
+const ACTIONS = ['l', 'r', 'u', 'd', 'p', 'k', 'b', 'sp1', 'sp2', 'fat'];
+const DEFAULT_KEYS = [
+  { l: 'KeyA', r: 'KeyD', u: 'KeyW', d: 'KeyS', p: 'KeyF', k: 'KeyG', b: 'KeyH', sp1: 'KeyR', sp2: 'KeyT', fat: 'KeyY' },
+  { l: 'ArrowLeft', r: 'ArrowRight', u: 'ArrowUp', d: 'ArrowDown', p: 'KeyK', k: 'KeyL', b: 'Semicolon', sp1: 'KeyO', sp2: 'KeyP', fat: 'KeyI' }
+];
+const P2_NUMPAD = { Numpad1: 'p', Numpad2: 'k', Numpad3: 'b', Numpad4: 'sp1', Numpad5: 'sp2', Numpad6: 'fat' };
+const KEYS = [0, 1].map(i => Object.assign({}, DEFAULT_KEYS[i], Store.get('keys' + (i + 1), {})));
+const KEYMAP1 = {}, KEYMAP2 = {};
+function rebuildKeymaps() {
+  for (const [m, i] of [[KEYMAP1, 0], [KEYMAP2, 1]]) { for (const k in m) delete m[k]; for (const a of ACTIONS) m[KEYS[i][a]] = a; }
+  const used = new Set(Object.values(KEYS[0]).concat(Object.values(KEYS[1])));
+  for (const c in P2_NUMPAD) if (!used.has(c)) KEYMAP2[c] = P2_NUMPAD[c];
+  for (const i of [0, 1]) for (const a of ['l', 'r', 'u', 'd']) Input.GAME_KEYS.add(KEYS[i][a]);
+}
+function saveKeys() { Store.set('keys1', KEYS[0]); Store.set('keys2', KEYS[1]); rebuildKeymaps(); }
+// назначить клавишу; если она уже занята — поменять местами
+function bindKey(pl, act, code) {
+  const old = KEYS[pl][act];
+  for (const i of [0, 1]) for (const a of ACTIONS) if (KEYS[i][a] === code && !(i === pl && a === act)) KEYS[i][a] = old;
+  KEYS[pl][act] = code; saveKeys();
+}
+function resetKeys() { for (const i of [0, 1]) Object.assign(KEYS[i], DEFAULT_KEYS[i]); saveKeys(); }
+function keyName(code) {
+  if (!code) return '—';
+  const sp = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Space: 'ПРОБЕЛ', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: 'BSLASH', Backquote: 'TILDE', Enter: 'ENTER', NumpadEnter: 'NUM ENTER', ShiftLeft: 'L SHIFT', ShiftRight: 'R SHIFT', ControlLeft: 'L CTRL', ControlRight: 'R CTRL', AltLeft: 'L ALT', AltRight: 'R ALT', Tab: 'TAB', CapsLock: 'CAPS', Backspace: 'BKSP' };
+  if (sp[code]) return sp[code];
+  return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'NUM ').toUpperCase().slice(0, 9);
+}
+rebuildKeymaps();
 
 class PlayerInput {
   constructor(maps, pad, touch) { this.maps = maps; this.pad = pad; this.touch = touch; this.prev = {}; this.buf = []; }
