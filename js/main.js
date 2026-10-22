@@ -31,6 +31,7 @@ document.addEventListener('visibilitychange', () => {
   setInterval(() => {
     const f = Game.finisher, show = Game.phase === 'finish' && f && !Game.ai[f.idx] && Game.cfg && Game.cfg.mode !== 'demo' && usePhone();
     if (UI.fatBtn) UI.fatBtn.style.display = show ? '' : 'none';
+    if (UI.supBtn) UI.supBtn.style.display = Game.state === 'match' && Game.phase === 'fight' && Game.f[0] && Game.f[0].sup >= 100 && !Game.ai[0] ? 'flex' : 'none';
     UI.updTouch();
   }, 200);
 })();

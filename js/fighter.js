@@ -17,6 +17,9 @@ const MOVES = {
   divekick: { st: 3, act: 40, rec: 6, dmg: 9, hs: 18, kb: 3.5, bs: 10, box: [2, -26, 24, 22], air: true, dive: true, snd: 'kick' },
 };
 MOVES.jab.chain.push('backfist', 'overhead', 'pushkick'); MOVES.cross.chain.push('backfist', 'pushkick'); MOVES.kick.chain.push('pushkick');
+// дополнительные комбо-связки
+MOVES.kick.chain.push('sweep', 'backfist'); MOVES.backfist.chain.push('uppercut', 'roundhouse');
+MOVES.sweep.chain = ['uppercut', 'kick']; MOVES.pushkick.chain = ['jab', 'cross', 'roundhouse']; MOVES.overhead.chain = ['sweep', 'kick', 'uppercut'];
 // для оружия чуть дальше достаёт
 for (const k of ['jab', 'cross']) MOVES[k + 'W'] = Object.assign({}, MOVES[k], { box: [6, -60, 44, 24], dmg: MOVES[k].dmg + 1, snd: 'slashHit' });
 
@@ -35,7 +38,7 @@ const DASH = {
 };
 
 class Fighter {
-  constructor(ch, idx, game) { this.ch = ch; this.idx = idx; this.g = game; this.R = new Raster(SPR_W, SPR_H); this.taken = 0; this.reset(STAGE_W / 2, 1); }
+  constructor(ch, idx, game) { this.ch = ch; this.idx = idx; this.g = game; this.R = new Raster(SPR_W, SPR_H); this.taken = 0; this.sup = 0; this.reset(STAGE_W / 2, 1); }
   reset(x, facing) { this.uCd = 0; this.dCd = 0; this.pCd = 0;
     Object.assign(this, {
       x, y: GROUND, vx: 0, vy: 0, facing, hp: 100, dhp: 100, st: 'idle', t: 0, anim: randi(0, 100), move: null, moveName: '', mt: 0, hitDone: false,
@@ -71,6 +74,8 @@ class Fighter {
     if (this.invul > 0) this.invul--;
     if (this.uCd > 0) this.uCd--; if (this.dCd > 0) this.dCd--; if (this.pCd > 0) this.pCd--;
     if (this.ghost > 0) this.ghost--;
+    // супер можно начать и из начала удара/блока: H, F, G почти никогда не жмутся в один кадр
+    if (ctl && ctl.special === 'super' && /^(attack|block|cblock|crouch)$/.test(this.st) && !(this.st === 'attack' && (this.move.air || this.mt > this.move.st + 4)) && this.trySpecial('super')) return;
     if (this.st === 'frozen') {
       this.physics();
       if (--this.frozen <= 0) { this.tint = null; this.setSt('hit'); this.stun = 6; FX.burst && Sound.play('shatterS'); for (let i = 0; i < 14; i++) FX.p('px', this.x + rand(-8, 8), this.y - rand(5, 60), rand(-2, 2), rand(-2, 0), 30, choice(['#ffffff', '#9fe6ff', '#4f9fe0']), 1, 0.2); }
@@ -158,6 +163,7 @@ class Fighter {
     if (kind === 'proj') { if (this.g.projOf(this) || this.pCd > 0) return false; this.pCd = 50; this.face(); this.setSt('special'); this.mt = 0; Sound.play('cast'); return true; }
     if (kind === 'dash') { if (this.dCd > 0) return false; this.face(); this.startDash(); this.dCd = 70; return true; }
     if (kind === 'fatal') return this.g.tryFatality(this);
+    if (kind === 'super') return this.g.startSuper ? this.g.startSuper(this) : false;
     // коронный приём — с перезарядкой, чтобы его нельзя было спамить
     if (kind === 'unique') { if (this.uCd > 0) return false; this.landT = 0; this.burst = false; this.countered = false; const ok = this.startUnique(); if (ok) this.uCd = UNIQUE_CD; return ok; }
     return false;
@@ -278,13 +284,17 @@ class Fighter {
       this.setSt('bstun'); this.stun = h.bs || 12; this.vx = dir * Math.max(1.5, (h.kb || 2) * 0.9);
       this.hp -= bd; this.roundDmg += bd; this.taken += bd;
       if (this.g.dmgPop) this.g.dmgPop(this, bd, true);
+      this.sup = Math.min(100, this.sup + bd * 0.8); this.opp.sup = Math.min(100, this.opp.sup + bd * 0.6);
       return 'block';
     }
     const bot = this.g.ai && this.g.ai[this.opp.idx];
     let dmg = h.dmg * (bot && bot.dmgK ? bot.dmgK : 1);
+    // удары подряд в одной серии: каждый следующий слабее на 15%
+    const cn = this.opp.combo || 0; if (cn > 0) dmg *= Math.pow(0.85, cn);
     const airborne = this.air || this.st === 'fall';
     if (airborne) { this.juggle++; dmg *= Math.pow(0.72, this.juggle); }
     dmg = Math.max(1, Math.round(dmg));
+    this.sup = Math.min(100, this.sup + dmg * 1.1); this.opp.sup = Math.min(100, this.opp.sup + dmg * 1.7);
     this.hp = Math.max(0, this.hp - dmg); this.roundDmg += dmg; this.taken += dmg; this.flash = 4;
     if (this.g.dmgPop) this.g.dmgPop(this, dmg, false);
     this.frozen = 0; this.tint = null; this.alpha = 1; this.visFlip = false; this.jet = false;

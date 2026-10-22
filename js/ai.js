@@ -65,6 +65,8 @@ class AI {
       return c;
     }
     if (f.st === 'jump') return c;
+    // супер-удар, когда шкала полна и соперник на нужной дистанции
+    if (f.sup >= 100 && f.canAct() && typeof superOf === 'function') { const S = superOf(f.ch); if (dist >= S.min && dist <= S.max && o.st !== 'fall' && o.st !== 'down' && Math.random() < [0.02, 0.05, 0.12][this.lv - 1]) { c.special = 'super'; return c; } }
     const atk = o.st === 'attack' ? o.move : null;
     // --- защита: атака соперника видна после «реакции» ---
     if (atk && dist < 95) {

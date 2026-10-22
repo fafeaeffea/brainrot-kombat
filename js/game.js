@@ -36,7 +36,7 @@ const Game = {
     this.f[0].reset(STAGE_W / 2 - 62, 1); this.f[1].reset(STAGE_W / 2 + 62, -1);
     this.camX = (STAGE_W - W) / 2; this.zoom = 1; this.projs = []; this.ghosts = []; FX.clear(); this.stageState = {}; this.zones = []; this.splats = []; this.cine = 0; this.banner = null; this.impactT = 0; this.pops = [];
     this.timer = Settings.time || 0; this.tsub = 0; this.phase = 'intro'; this.pt = 0; this.ann = null; this.fat = null; this.dim = 0; this.dimT = 0;
-    this.finisher = this.loser = this.winner = null; this.combos = [null, null]; this.inp.forEach(i => i.clear());
+    this.finisher = this.loser = this.winner = null; this.supS = null; this.combos = [null, null]; this.inp.forEach(i => i.clear());
     if (this.cfg.mode !== 'demo') Sound.music('fight', this.stageIdx);
   },
   get demo() { return this.cfg && this.cfg.mode === 'demo'; },
@@ -130,15 +130,15 @@ const Game = {
     const [a, b] = this.f;
     this.phaseLogic();
     if (this.phase === 'fatality') this.fatalityStep();
+    else if (this.supS) { this.superStep(); for (const f of this.f) { if (f.flash > 0) f.flash--; f.anim++; f.computePose(); } }
     else {
       const c0 = this.ctlFor(0), c1 = this.ctlFor(1);
       a.update(c0); b.update(c1);
     }
     this.separate();
     for (const f of this.f) { f.x = clamp(f.x, 14, STAGE_W - 14); if (f.dhp > f.hp) f.dhp = Math.max(f.hp, f.dhp - 0.5); else f.dhp = f.hp; }
-    if (this.phase !== 'fatality' && this.phase !== 'victory') { this.melee(a, b); this.melee(b, a); }
-    for (const p of this.projs) p.update(this);
-    this.zoneStep();
+    if (this.phase !== 'fatality' && this.phase !== 'victory' && !this.supS) { this.melee(a, b); this.melee(b, a); }
+    if (!this.supS) { for (const p of this.projs) p.update(this); this.zoneStep(); }
     this.projCollisions();
     this.projs = this.projs.filter(p => !p.dead);
     for (const gh of this.ghosts) gh.life--; this.ghosts = this.ghosts.filter(g => g.life > 0);
@@ -153,6 +153,13 @@ const Game = {
       const w = this.winner;
       this.zoom = lerp(this.zoom, 2.1, 0.05);
       this.zx = lerp(this.zx, w.x - this.camX, 0.08); this.zy = lerp(this.zy, w.y - 44, 0.08);
+      return;
+    }
+    if (this.supS && this.supS.foc) {
+      const S = this.supS;
+      this.camX = lerp(this.camX, clamp(S.foc.x - W / 2, 0, STAGE_W - W), 0.15);
+      if (S.snap) { this.zoom = S.z; this.zx = S.foc.x - this.camX; this.zy = S.foc.y; S.snap = false; }
+      else { this.zoom = lerp(this.zoom, S.z, 0.12); this.zx = lerp(this.zx, S.foc.x - this.camX, 0.14); this.zy = lerp(this.zy, S.foc.y, 0.14); }
       return;
     }
     if (this.phase === 'fatality' && this.fat) {
@@ -329,7 +336,7 @@ const Game = {
       if (t === 72) { this.announce([{ txt: 'БОЙ!', s: 6, col: ['#ffffff', '#ffd040', '#e02010'] }], 45); Sound.play('gong'); if (!this.demo) Sound.say('Бой!', 'impact'); }
       if (t >= 80) { this.phase = 'fight'; this.pt = 0; if (!this.demo) YA.gameStart(); }
     } else if (ph === 'fight') {
-      if (this.timer > 0 && ++this.tsub >= 60) { this.tsub = 0; this.timer--; if (this.timer === 0) this.timeUp(); }
+      if (this.timer > 0 && !this.supS && ++this.tsub >= 60) { this.tsub = 0; this.timer--; if (this.timer === 0) this.timeUp(); }
     } else if (ph === 'ko') {
       if (this.loser.st === 'dead' && !this.koT) this.koT = t;
       if (t === 40) { const w = this.winner; this.announce([{ txt: w.ch.name, s: 3, col: ['#fff3a0', '#ffb030'] }, { txt: 'ПОБЕЖДАЕТ', s: 2, col: '#ffffff' }].concat(w.roundDmg === 0 ? [{ txt: 'БЕЗУПРЕЧНАЯ ПОБЕДА', s: 2, col: ['#a0f0ff', '#3a8ad8'] }] : []), 110); if (!this.demo) Sound.say(w.ch.name + '... побеждает!', 'name'); }
@@ -429,6 +436,7 @@ const Game = {
     for (const z of this.zones) if (z.draw) z.draw(c, cx, z);
     FX.draw(c, cx);
     if (this.fat && this.fat.sc.front) this.fat.sc.front(c, cx, this, this.fat.a, this.fat.v, this.fat.t, this.fat.s);
+    if (this.supS) drawSuperFx(c, cx, this);
     c.restore();
     if (this.flashA > 0) { c.globalAlpha = this.flashA; c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); c.globalAlpha = 1; }
     // камера с приближением
@@ -531,6 +539,8 @@ const Game = {
         ctx.globalAlpha = 1;
       }
     }
+    if (this.phase === 'fight' || this.phase === 'intro') this.drawSuperBars(ctx);
+    this.drawSuperBanner(ctx);
     this.drawAnn(ctx);
     if (this.phase === 'finish' && !this.ai[this.finisher.idx]) {
       if (Settings.hints !== false) this.drawFatHint(ctx, this.finisher.ch.fatal, this.fatProg || 0);

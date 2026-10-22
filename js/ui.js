@@ -621,6 +621,9 @@ const UI = {
     row(PROJ[ch.proj].name, '← → + РУКА  (' + keyName(KEYS[0].sp1) + ')');
     row(DASH[ch.dash].name, '↓ → + НОГА  (' + keyName(KEYS[0].sp2) + ')');
     row(uniqueOf(ch).name + ' (КОРОННЫЙ)', '↓ ← + РУКА  (' + keyName(KEYS[0].sp3) + ')', '#ffd040');
+    const su = superOf(ch);
+    sec('СУПЕР-УДАР (ПРИ ПОЛНОЙ ШКАЛЕ, -30% ЗДОРОВЬЯ)');
+    row(su.name + ' (ДАЛЬНОСТЬ: ' + su.range + ')', 'БЛОК + РУКА + НОГА  (' + keyName(KEYS[0].b) + '+' + keyName(KEYS[0].p) + '+' + keyName(KEYS[0].k) + ')', '#ffd040');
     sec('ФАТАЛИТИ (ПРИ «ДОБЕЙ!», ТОЛЬКО СТРЕЛКИ)');
     row(ch.fatal.name, arr(ch.fatal.seq) + '  (ИЛИ ' + keyName(KEYS[0].fat) + ')', '#ff8a7a');
     sec('БАЗОВЫЕ УДАРЫ');
@@ -636,7 +639,13 @@ const UI = {
     row('Бросок (вплотную)', '→ + РУКА');
     row('Удары в прыжке', '↑ ЗАТЕМ РУКА / НОГА');
     row('Блок', 'БЛОК ИЛИ ДЕРЖАТЬ ←');
-    row('Комбо', 'РУКА, РУКА, НОГА  ИЛИ  РУКА, РУКА, ↓+РУКА', '#8ad0ff');
+    sec('КОМБО (КАЖДЫЙ СЛЕДУЮЩИЙ УДАР СЕРИИ СЛАБЕЕ НА 15%)');
+    row('Тройка', 'РУКА, РУКА, НОГА', '#8ad0ff');
+    row('В апперкот', 'РУКА, РУКА, ↓+РУКА', '#8ad0ff');
+    row('Нижний пресс', 'НОГА, ↓+НОГА, ↓+РУКА', '#8ad0ff');
+    row('Разворот', 'РУКА, ←+РУКА, ←+НОГА', '#8ad0ff');
+    row('Пробой', '→+РУКА, ↓+НОГА, НОГА', '#8ad0ff');
+    row('Отбросить', '→+НОГА, РУКА, ←+НОГА', '#8ad0ff');
     const note = el('div', 'msec', L); note.appendChild(pxCanvas('→ ВПЕРЁД К СОПЕРНИКУ, ← НАЗАД. В СКОБКАХ - БЫСТРАЯ КЛАВИША ИГРОКА 1.', 1, '#a090a0', 250));
     if (this.cur === 'moves') this.items.forEach((b, j) => b.classList.toggle('foc', b === S.tabs[i]));
   },
@@ -769,6 +778,7 @@ const UI = {
     };
     mk('tp', 'Р', 'p'); mk('tk', 'Н', 'k'); mk('tbk', 'Б', 'b'); mk('ts1', 'СНАРЯД', 'sp1'); mk('ts2', 'РЫВОК', 'sp2'); mk('ts3', 'КОРОНА', 'sp3');
     this.fatBtn = mk('tfat', 'ФАТАЛИТИ', 'fat');
+    this.supBtn = mk('tsup', 'СУПЕР', 'sup');
     // кнопки в бою (для мыши и пальца): пауза и список приёмов своего бойца
     const hb = el('div', 'hudbtns', document.getElementById('stage')); this.hudEl = hb;
     const b1 = el('div', 'hbtn', hb); b1.appendChild(pxCanvas('II ПАУЗА', 1, '#ffffff'));

@@ -1,7 +1,7 @@
 'use strict';
 // Клавиатура, геймпады, сенсорное управление
 const Input = {
-  keys: {}, menuQ: [], rawQ: [], touch: { l: 0, r: 0, u: 0, d: 0, p: 0, k: 0, b: 0, sp1: 0, sp2: 0, sp3: 0, fat: 0 }, padPrev: [{}, {}], anyKey: false,
+  keys: {}, menuQ: [], rawQ: [], touch: { l: 0, r: 0, u: 0, d: 0, p: 0, k: 0, b: 0, sp1: 0, sp2: 0, sp3: 0, fat: 0, sup: 0 }, padPrev: [{}, {}], anyKey: false,
   GAME_KEYS: new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Tab']),
   init() {
     addEventListener('keydown', e => {
@@ -72,7 +72,7 @@ rebuildKeymaps();
 class PlayerInput {
   constructor(maps, pad, touch) { this.maps = maps; this.pad = pad; this.touch = touch; this.prev = {}; this.buf = []; }
   poll(frame, facing) {
-    const h = { l: 0, r: 0, u: 0, d: 0, p: 0, k: 0, b: 0, sp1: 0, sp2: 0, sp3: 0, fat: 0 };
+    const h = { l: 0, r: 0, u: 0, d: 0, p: 0, k: 0, b: 0, sp1: 0, sp2: 0, sp3: 0, fat: 0, sup: 0 };
     for (const m of this.maps) for (const code in m) if (Input.keys[code]) h[m[code]] = 1;
     if (this.touch) for (const k in h) h[k] |= Input.touch[k];
     if (this.pad != null) { const ps = Input.padState(this.pad); if (ps) for (const k in h) h[k] |= ps[k]; }
@@ -84,6 +84,11 @@ class PlayerInput {
     if (nd) { const H = this.hist || (this.hist = []); if (H.length && frame - H[H.length - 1].f > 90) H.length = 0; H.push({ d: nd, f: frame }); if (H.length > 8) H.shift(); }
     while (this.buf.length && frame - this.buf[0].f > 50) this.buf.shift();
     const c = { l: h.l, r: h.r, u: h.u, d: h.d, b: h.b, p: pr.p, k: pr.k, special: null, seq: null };
+    // супер: блок + рука + нога одновременно (или кнопка «СУПЕР» на телефоне)
+    const st = this.supT || (this.supT = { b: -99, p: -99, k: -99 });
+    for (const k of ['b', 'p', 'k']) if (pr[k]) st[k] = frame;
+    const near = frame - Math.min(st.b, st.p, st.k) <= 10;
+    if ((h.b && h.p && h.k && near && (pr.b || pr.p || pr.k)) || pr.sup) { c.special = 'super'; c.p = c.k = 0; return c; }
     if (pr.sp1) c.special = 'proj'; else if (pr.sp2) c.special = 'dash'; else if (pr.sp3) c.special = 'unique'; else if (pr.fat) c.special = 'fatal';
     const toS = e => e.d === 'u' ? 'U' : e.d === 'd' ? 'D' : ((e.d === 'r') === (facing === 1) ? 'F' : 'B');
     if (nd) c.arrows = this.hist.map(toS);
