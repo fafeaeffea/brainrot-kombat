@@ -70,7 +70,12 @@ function ditherV(ctx, x, y, w, h, cols) {
       d[j * w + k] = f > th ? cs[i + 1] : cs[i];
     }
   }
-  ctx.putImageData(img, x, y);
+  // putImageData не учитывает трансформацию: на масштабированном холсте рисуем через временный
+  const m = ctx.getTransform ? ctx.getTransform() : null;
+  if (m && (m.a !== 1 || m.d !== 1 || m.e || m.f)) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').putImageData(img, 0, 0);
+    const sm = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false; ctx.drawImage(cv, x, y, w, h); ctx.imageSmoothingEnabled = sm;
+  } else ctx.putImageData(img, x, y);
 }
 
 // ---------- Пиксельный шрифт 5x7 (кириллица + латиница) ----------

@@ -379,8 +379,7 @@ const Game = {
   victoryFx() {
     const w = this.winner, t = this.pt, x = w.x, y = w.y;
     if (t === 10 || t === 60) { for (let i = 0; i < 50; i++) FX.p('px', x + rand(-10, 10), y - 60, rand(-3, 3), rand(-5, -1), randi(80, 140), choice(['#ffd040', '#fff3a0', '#ff6a3a', '#ffffff', w.ch.pal.fx]), 1, 0.08, { floor: true, drag: 0.98 }); }
-    if (t % 55 === 25) { this.boltT = 6; this.boltX = this.camX + rand(20, W - 20); this.flashA = 0.3; Sound.play('thunder'); }
-    if (t % 40 === 0 && t > 30) { const fx = this.camX + rand(40, W - 40), fy = rand(20, 90), col = choice(['#ffd040', '#ff4a8a', '#4ae0ff', '#7dff6a', w.ch.pal.fx]); FX.ring(fx, fy, col, 24, 26); for (let i = 0; i < 30; i++) { const a2 = rand(0, 6.28), s = rand(0.5, 2.2); FX.p('px', fx, fy, Math.cos(a2) * s, Math.sin(a2) * s, randi(40, 70), col, 1, 0.03, { floor: false, drag: 0.97, fade: true }); } }
+        if (t % 40 === 0 && t > 30) { const fx = this.camX + rand(40, W - 40), fy = rand(20, 90), col = choice(['#ffd040', '#ff4a8a', '#4ae0ff', '#7dff6a', w.ch.pal.fx]); FX.ring(fx, fy, col, 24, 26); for (let i = 0; i < 30; i++) { const a2 = rand(0, 6.28), s = rand(0.5, 2.2); FX.p('px', fx, fy, Math.cos(a2) * s, Math.sin(a2) * s, randi(40, 70), col, 1, 0.03, { floor: false, drag: 0.97, fade: true }); } }
     switch (w.ch.win) {
       case 'fist': if (t % 2 === 0) FX.fire(x + rand(-22, 22), y - rand(0, 10), 2, 3, 2); break;
       case 'bow': if (t % 2 === 0) { const a2 = t * 0.1; FX.p('px', x + Math.cos(a2) * 24, y - 30 + Math.sin(a2) * 30, 0, -0.3, 40, choice(['#ffffff', '#9fe6ff']), 1, 0); } break;
@@ -420,7 +419,7 @@ const Game = {
     FX.drawDecals(c, cx);
     for (const f of this.f) if (!f.hidden && f.alpha > 0.1) { const hgt = GROUND - f.y, w = Math.max(6, 22 - hgt * 0.1); c.globalAlpha = 0.35; c.fillStyle = '#000'; c.fillRect(Math.round(f.x - cx - w / 2), GROUND - 1, Math.round(w), 3); c.fillRect(Math.round(f.x - cx - w / 2 + 2), GROUND - 2, Math.round(w - 4), 5); c.globalAlpha = 1; }
     if (this.phase === 'victory' && this.winner) this.drawRays(c, cx);
-    if (this.boltT > 0) { this.boltT--; const bx = (this.boltX || 0) - cx; bolt(c, bx + rand(-30, 30), -5, bx, this.boltY || GROUND, '#cfe8ff', 12, 12, 2); bolt(c, bx + rand(-20, 20), -5, bx, this.boltY || GROUND, '#ffffff', 12, 8, 1); if (this.boltT === 0) this.boltY = null; }
+    if (this.boltT > 0) { this.boltT--; this.boltY = null; }
     if (this.fat && this.fat.sc.back) this.fat.sc.back(c, cx, this, this.fat.a, this.fat.v, this.fat.t, this.fat.s);
     for (const gh of this.ghosts) { c.globalAlpha = gh.life / 14 * 0.5; c.save(); c.translate(Math.round(gh.x - cx), 0); c.scale(gh.fc, 1); c.drawImage(gh.img, -SPR_OX, Math.round(gh.y) - SPR_OY, SPR_W, SPR_H); c.restore(); }
     c.globalAlpha = 1;
@@ -634,10 +633,13 @@ const Game = {
   },
   drawVS(c) {
     const t = this.vsT, [a, b] = this.f;
-    ditherV(c, 0, 0, W, H, ['#1a0410', '#4a0a1a', '#1a0410']);
+    if (!this._vsBg) { const [bv, bc] = mkCanvas(W, H); ditherV(bc, 0, 0, W, H, ['#1a0410', '#4a0a1a', '#1a0410']); this._vsBg = bv; }
+    c.drawImage(this._vsBg, 0, 0, W, H);
     c.globalAlpha = 0.2; c.fillStyle = '#ff6a1a'; for (let i = 0; i < 16; i++) { const yy = (i * 23 + t * 2) % H; c.fillRect(0, yy, W, 1); } c.globalAlpha = 1;
-    if (t % 50 === 5) { this.vsBolt = 5; Sound.play('thunder'); }
-    if (this.vsBolt > 0) { this.vsBolt--; bolt(c, W / 2 + rand(-40, 40), 0, W / 2, H, '#ffffff', 12, 14, 2); }
+    // вместо молний: мягкая энергетическая волна от центра раз в секунду
+    { const ph = (t % 60) / 60, r = 10 + ph * 220; c.globalAlpha = 0.45 * (1 - ph); c.strokeStyle = '#ffb040'; c.lineWidth = 3 * (1 - ph) + 1; c.beginPath(); c.ellipse(W / 2, H / 2, r, r * 0.55, 0, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1;
+      const gl = 0.25 + 0.15 * Math.sin(t * 0.12); c.globalAlpha = gl; c.fillStyle = '#ff7a20'; c.fillRect(W / 2 - 2, 0, 4, H); c.globalAlpha = gl * 0.5; c.fillRect(W / 2 - 6, 0, 12, H); c.globalAlpha = 1; }
+    if (t === 30) Sound.play('heavy');
     const k = easeOut(t / 30);
     for (const f of [a, b]) {
       const left = f.idx === 0, R = f.R;

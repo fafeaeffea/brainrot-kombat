@@ -252,7 +252,7 @@ const UI = {
     S.title.innerHTML = ''; S.title.appendChild(pxCanvas(mode === 'tower' ? 'БАШНЯ: ВЫБЕРИ БОЙЦА' : mode === '2p' ? 'ДВА ИГРОКА' : 'БОЙ С БОТОМ', 3, ['#fff6c0', '#ffb030']));
     S.hint.innerHTML = '';
     const K1 = KEYS[0], K2 = KEYS[1], dirs = K => keyName(K.u) + keyName(K.l) + keyName(K.d) + keyName(K.r);
-    S.hint.appendChild(pxCanvas(mode === '2p' ? 'ИГРОК 1: ' + dirs(K1) + ' + ' + keyName(K1.p) + '. ИГРОК 2: ' + dirs(K2) + ' + ' + keyName(K2.p) + '.' : 'СТРЕЛКИ ИЛИ ' + dirs(K1) + ' - ВЫБОР. ENTER ИЛИ ' + keyName(K1.p) + ' - ПОДТВЕРДИТЬ.', 1, '#c0b0b0', 200, 'center'));
+    S.hint.appendChild(pxCanvas(mode === '2p' ? 'ИГРОК 1: ' + dirs(K1) + ' + ' + keyName(K1.p) + '. ИГРОК 2: ' + dirs(K2) + ' + ' + keyName(K2.p) + '.' : 'СТРЕЛКИ ИЛИ ' + dirs(K1) + ' - ВЫБОР. ENTER ИЛИ ' + keyName(K1.p) + ' - ПОДТВЕРДИТЬ.', 1, '#c0b0b0', 300, 'center'));
     S.side[1].style.visibility = mode === 'tower' ? 'hidden' : 'visible';
     Sound.say('Выбери бойца');
     this.show('select');
@@ -751,6 +751,6 @@ const UI = {
   updTouch() {
     const live = Game.state !== 'demo' && Game.cfg && Game.cfg.mode !== 'demo' && !this.cur, on = IS_TOUCH && live;
     document.getElementById('touch').classList.toggle('on', !!on);
-    if (this.hudEl) this.hudEl.classList.toggle('on', !!live);
+    if (this.hudEl) this.hudEl.classList.toggle('on', !!live && Game.state !== 'vs');
   }
 };
