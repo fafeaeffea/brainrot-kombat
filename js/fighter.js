@@ -284,7 +284,7 @@ class Fighter {
       this.setSt('bstun'); this.stun = h.bs || 12; this.vx = dir * Math.max(1.5, (h.kb || 2) * 0.9);
       this.hp -= bd; this.roundDmg += bd; this.taken += bd;
       if (this.g.dmgPop) this.g.dmgPop(this, bd, true);
-      this.sup = Math.min(100, this.sup + bd * 0.8); this.opp.sup = Math.min(100, this.opp.sup + bd * 0.6);
+      this.sup = Math.min(100, this.sup + bd * 0.8 / 1.3); this.opp.sup = Math.min(100, this.opp.sup + bd * 0.6 / 1.3);
       return 'block';
     }
     const bot = this.g.ai && this.g.ai[this.opp.idx];
@@ -294,7 +294,7 @@ class Fighter {
     const airborne = this.air || this.st === 'fall';
     if (airborne) { this.juggle++; dmg *= Math.pow(0.72, this.juggle); }
     dmg = Math.max(1, Math.round(dmg));
-    this.sup = Math.min(100, this.sup + dmg * 1.1); this.opp.sup = Math.min(100, this.opp.sup + dmg * 1.7);
+    this.sup = Math.min(100, this.sup + dmg * 1.1 / 1.3); this.opp.sup = Math.min(100, this.opp.sup + dmg * 1.7 / 1.3);
     this.hp = Math.max(0, this.hp - dmg); this.roundDmg += dmg; this.taken += dmg; this.flash = 4;
     if (this.g.dmgPop) this.g.dmgPop(this, dmg, false);
     this.frozen = 0; this.tint = null; this.alpha = 1; this.visFlip = false; this.jet = false;
