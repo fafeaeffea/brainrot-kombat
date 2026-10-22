@@ -26,10 +26,10 @@ document.addEventListener('visibilitychange', () => {
   Game.init();
   document.getElementById('loading').remove();
   Game.startDemo();
-  UI.show('menu');
+  UI.show(Settings.device ? 'menu' : 'device');
   YA.loaded();
   setInterval(() => {
-    const f = Game.finisher, show = Game.phase === 'finish' && f && !Game.ai[f.idx] && Game.cfg && Game.cfg.mode !== 'demo';
+    const f = Game.finisher, show = Game.phase === 'finish' && f && !Game.ai[f.idx] && Game.cfg && Game.cfg.mode !== 'demo' && usePhone();
     if (UI.fatBtn) UI.fatBtn.style.display = show ? '' : 'none';
     UI.updTouch();
   }, 200);

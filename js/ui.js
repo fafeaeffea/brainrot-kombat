@@ -34,13 +34,15 @@ function portrait(ch, size = 32) {
 }
 function el(tag, cls, parent, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); if (html != null) e.innerHTML = html; return e; }
 const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+// экранные кнопки: по выбору игрока (ПК / телефон), до выбора — по типу устройства
+const usePhone = () => Settings.device ? Settings.device === 'phone' : IS_TOUCH;
 
 const UI = {
   cur: null, prev: null, focus: 0, items: [], S: {},
   init() {
     this.root = document.getElementById('ui');
-    for (const k of ['menu', 'modes', 'select', 'arena', 'tower', 'moves', 'controls', 'settings', 'pause', 'result', 'ending']) { const e = el('div', 'scr', this.root); e.id = 's-' + k; this.S[k] = { el: e }; }
-    this.buildMenu(); this.buildModes(); this.buildSelect(); this.buildArena(); this.buildMoves(); this.buildControls(); this.buildSettings(); this.buildPause();
+    for (const k of ['device', 'menu', 'modes', 'select', 'arena', 'tower', 'moves', 'controls', 'settings', 'pause', 'result', 'ending']) { const e = el('div', 'scr', this.root); e.id = 's-' + k; this.S[k] = { el: e }; }
+    this.buildMenu(); this.buildModes(); this.buildSelect(); this.buildArena(); this.buildMoves(); this.buildControls(); this.buildSettings(); this.buildPause(); this.buildDevice();
     this.buildTouch();
     document.getElementById('game').addEventListener('pointerdown', () => { if (Game.phase === 'victory' && !Game.demo && Game.pt > 120 && !this.cur) Game.endMatch(); });
   },
@@ -684,6 +686,32 @@ const UI = {
       this.ctlRefresh();
     };
   },
+  // ---------- первый запуск: на чём играем ----------
+  buildDevice() {
+    const S = this.S.device, e = S.el;
+    el('div', 'sel-title', e).appendChild(pxCanvas('НА ЧЁМ ТЫ ИГРАЕШЬ?', 3, ['#fff6c0', '#ffb030']));
+    const row = el('div', 'devrow', e);
+    for (const [v, lab, sub] of [['pc', 'КОМПЬЮТЕР', 'КЛАВИАТУРА, БЕЗ КНОПОК НА ЭКРАНЕ'], ['phone', 'ТЕЛЕФОН', 'КНОПКИ УПРАВЛЕНИЯ НА ЭКРАНЕ']]) {
+      const b = el('div', 'btn mdbtn devbtn', row);
+      const [cv, c] = mkCanvas(64, 40); cv.className = 'px devic'; c.imageSmoothingEnabled = false; this.devIcon(c, v); b.appendChild(cv);
+      b.appendChild(pxCanvas(lab, 3, ['#fff6d0', '#ffc040'])); b.appendChild(pxCanvas(sub, 1, '#d0b8b0', 0, 'center'));
+      b.onclick = e2 => { if (e2) e2.stopPropagation(); Sound.init(); Sound.play('select'); this.pickDevice(v); };
+      b.onpointerenter = () => { const i = this.items.indexOf(b); if (i >= 0 && i !== this.focus) this.setFocus(i); };
+    }
+    el('div', 'devnote', e).appendChild(pxCanvas('ПОМЕНЯТЬ МОЖНО В НАСТРОЙКАХ', 1, '#a090a0', 0, 'center'));
+    S.defFocus = IS_TOUCH ? 1 : 0;
+  },
+  devIcon(c, v) {
+    const R = (x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
+    if (v === 'pc') {
+      R(10, 2, 44, 26, '#140c18'); R(12, 4, 40, 22, '#3a8ad8'); R(12, 4, 40, 4, '#7ab8f8'); R(28, 28, 8, 4, '#5a5a6a'); R(20, 32, 24, 2, '#8a8a9a');
+      R(4, 35, 56, 5, '#5a5a6a'); for (let i = 0; i < 9; i++) R(6 + i * 6, 36, 4, 2, '#d0d0dc');
+    } else {
+      R(20, 0, 24, 40, '#140c18'); R(22, 2, 20, 34, '#2a2a3a'); R(23, 5, 18, 27, '#3ad8a8'); R(23, 5, 18, 4, '#9affd8'); R(30, 37, 4, 2, '#8a8a9a');
+      R(25, 24, 4, 4, '#ffffff'); R(35, 24, 4, 4, '#ff6a3a');
+    }
+  },
+  pickDevice(v) { Settings.device = v; saveSettings(); this.updTouch(); this.show('menu'); },
   // ---------- настройки ----------
   buildSettings() {
     const S = this.S.settings, e = S.el;
@@ -697,6 +725,7 @@ const UI = {
       ['sfx', 'ЗВУКИ', [[true, 'ВКЛ'], [false, 'ВЫКЛ']]],
       ['voice', 'ГОЛОС ДИКТОРА', [[true, 'ВКЛ'], [false, 'ВЫКЛ']]],
       ['hints', 'ПОДСКАЗКА ФАТАЛИТИ', [[true, 'ВКЛ'], [false, 'ВЫКЛ']]],
+      ['device', 'УСТРОЙСТВО', [['pc', 'ПК (БЕЗ КНОПОК)'], ['phone', 'ТЕЛЕФОН (КНОПКИ)']]],
     ];
     if (Settings.hints === undefined) Settings.hints = true;
     const draw = (b, o) => {
@@ -749,7 +778,7 @@ const UI = {
     const ps = el('div', 'tpause', T); ps.style.display = 'none'; ps.appendChild(pxCanvas('II', 2, '#ffffff')); ps.addEventListener('pointerdown', e => { e.preventDefault(); if (Game.phase === 'victory') Game.endMatch(); else Game.pause(true); });
   },
   updTouch() {
-    const live = Game.state !== 'demo' && Game.cfg && Game.cfg.mode !== 'demo' && !this.cur, on = IS_TOUCH && live;
+    const live = Game.state !== 'demo' && Game.cfg && Game.cfg.mode !== 'demo' && !this.cur, on = usePhone() && live;
     document.getElementById('touch').classList.toggle('on', !!on);
     if (this.hudEl) this.hudEl.classList.toggle('on', !!live && Game.state !== 'vs');
   }
