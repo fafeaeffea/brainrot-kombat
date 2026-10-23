@@ -92,6 +92,7 @@ class Fighter {
       case 'attack': this.attackUpdate(ctl, fwd, back); break;
       case 'special': this.specialUpdate(); break;
       case 'dash': this.dashUpdate(); break;
+      case 'step': this.stepUpdate(); break;
       case 'unique': this.uniqueUpdate(); break;
       case 'hit': case 'bstun': this.vx *= 0.82; this.x += this.vx; if (this.air) this.physics(); if (--this.stun <= 0) this.toNeutral(); break;
       case 'fall':
@@ -113,6 +114,7 @@ class Fighter {
     this.face();
     if (!ctl) { this.setStIf('idle'); return; }
     if (ctl.special && this.trySpecial(ctl.special)) return;
+    if (ctl.step && this.g.phase === 'fight') { this.startStep(ctl.step); return; }
     if (ctl.p) {
       if (ctl.d) { this.startMove('uppercut'); return; }
       const o = this.opp;
@@ -179,6 +181,18 @@ class Fighter {
       else if (tp === 'plasma') FX.p('px', hx + rand(-6, 6), hy + rand(-6, 6), 0, 0, 12, '#7dff6a', 1, 0);
     }
     if (this.mt >= 30) this.toNeutral();
+  }
+  startStep(dir) {
+    this.face(); this.stepF = dir === 'F'; this.setSt('step'); this.mt = 0;
+    Sound.play('whoosh');
+    for (let i = 0; i < 4; i++) FX.p('px', this.x - this.facing * rand(4, 12), GROUND - 1, -this.facing * rand(0.3, 1.2) * (this.stepF ? 1 : -1), -rand(0.2, 0.8), randi(10, 18), '#c8b8a0', 1, 0.02, { fade: true });
+  }
+  stepUpdate() {
+    // вперёд — быстрый подшаг (16 кадров), назад — отскок с небольшим прыжком (18 кадров)
+    const dur = this.stepF ? 16 : 18, k = ++this.mt / dur;
+    this.x += (this.stepF ? 5.4 : -4.8) * this.facing * Math.sqrt(Math.max(0, 1 - k));
+    this.y = this.stepF ? GROUND : GROUND - Math.sin(Math.min(1, k) * Math.PI) * 10;
+    if (this.mt >= dur) { this.y = GROUND; this.toNeutral(); }
   }
   startDash() {
     const d = DASH[this.ch.dash];
@@ -333,6 +347,7 @@ class Fighter {
         snap = k >= 9 && k < 13; break;
       }
       case 'dash': p = this.dashPose(); snap = true; break;
+      case 'step': p = this.stepF ? ANIM.walk(ch, this.anim * 3) : mkPose(POSES.jump, { fF: [4, -6] }); snap = true; break;
       case 'unique': p = this.uniquePose(); snap = this.mt < 3; break;
       case 'hit': p = mkPose(this.hitLow ? POSES.hitLow : POSES.hit); if (t < 2) snap = true; break;
       case 'fall': p = mkPose(POSES.fall, { rot: -clamp(this.t * 5, 0, 80) }); snap = true; break;

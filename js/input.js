@@ -90,12 +90,18 @@ class PlayerInput {
     const near = frame - Math.min(st.b, st.p, st.k) <= 10;
     if ((h.b && h.p && h.k && near && (pr.b || pr.p || pr.k)) || pr.sup) { c.special = 'super'; c.p = c.k = 0; return c; }
     if (pr.sp1) c.special = 'proj'; else if (pr.sp2) c.special = 'dash'; else if (pr.sp3) c.special = 'unique'; else if (pr.fat) c.special = 'fatal';
+    // двойное нажатие в одну сторону: шаг-рывок к сопернику или отскок назад
+    for (const d of ['l', 'r']) if (pr[d]) {
+      const T = this.tap;
+      if (T && T.d === d && frame - T.f <= 14) { c.step = (d === 'r') === (facing === 1) ? 'F' : 'B'; this.tap = null; }
+      else this.tap = { d, f: frame };
+    }
     const toS = e => e.d === 'u' ? 'U' : e.d === 'd' ? 'D' : ((e.d === 'r') === (facing === 1) ? 'F' : 'B');
     if (nd) c.arrows = this.hist.map(toS);
     if (c.p || c.k) c.seq = this.buf.map(e => e.d === 'u' ? 'U' : e.d === 'd' ? 'D' : ((e.d === 'r') === (facing === 1) ? 'F' : 'B'));
     return c;
   }
-  clear() { this.buf = []; this.hist = []; }
+  clear() { this.buf = []; this.hist = []; this.tap = null; }
 }
 function seqMatch(seq, pat) {
   if (!seq || seq.length < pat.length) return false;
