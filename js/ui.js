@@ -102,6 +102,7 @@ const UI = {
     this.btn(col, 'СПИСОК УДАРОВ', () => this.enterArcade(() => this.show('moves')), 'big');
     this.btn(col, 'УПРАВЛЕНИЕ', () => this.enterArcade(() => this.show('controls')), 'big');
     this.btn(col, 'НАСТРОЙКИ', () => this.enterArcade(() => this.show('settings')), 'big');
+    if (IS_DESKTOP) { col.classList.add('five'); this.btn(col, 'ВЫХОД', () => window.close(), 'big'); }
     S.stats = el('div', 'stats', e);
     S.onShow = () => { S.stats.innerHTML = ''; S.stats.appendChild(pxCanvas('ПОБЕД: ' + Store.get('wins', 0) + '    ФАТАЛИТИ: ' + Store.get('fatalities', 0), 1, '#c0a0a0')); };
   },

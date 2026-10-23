@@ -1,6 +1,8 @@
 'use strict';
 // Обёртка площадок: Yandex Games SDK v2 или VK Bridge (VK Игры). Без них (локально) игра работает как обычно.
 // VK открывает игру по ссылке с параметрами запуска (vk_app_id, sign...), по ним и узнаём площадку.
+// ПК-версия для Steam (Electron): рекламы нет, в меню есть «ВЫХОД»
+const IS_DESKTOP = /Electron/.test(navigator.userAgent);
 const IS_VK = /[?&](vk_app_id|vk_platform|sign)=/.test(location.search);
 const YA = {
   sdk: null, vk: null, playing: false, adT: -1e9,

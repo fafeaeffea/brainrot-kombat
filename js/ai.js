@@ -107,6 +107,7 @@ class AI {
       if (r < 0.35 && !g.projOf(f)) c.special = 'proj';
       else if (r < 0.48) c.special = 'dash';
       else if (r < 0.56) c.special = 'unique';
+      else if (r < 0.7 && this.lv >= 2) c.step = 'F';
       else this.push(14 + randi(0, 14), { [fw]: 1 });
     } else if (dist > 50) {
       if (r < 0.14 && !g.projOf(f)) c.special = 'proj';
@@ -127,6 +128,7 @@ class AI {
       else if (r < this.aggr * 0.82) { c[bk] = 1; c.k = 1; }
       else if (r < this.aggr * 0.9) { c[fw] = 1; c.k = 1; }
       else if (r < 0.9) this.push(10, { b: 1 });
+      else if (this.lv >= 2 && r < 0.95) c.step = 'B';
       else this.push(10, { [bk]: 1 });
     }
     return this.cooled(c);

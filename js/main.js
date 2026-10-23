@@ -26,6 +26,7 @@ document.addEventListener('visibilitychange', () => {
   Game.init();
   document.getElementById('loading').remove();
   Game.startDemo();
+  if (IS_DESKTOP && !Settings.device) Settings.device = 'pc'; // в ПК-версии экран выбора устройства не нужен
   UI.show(Settings.device ? 'menu' : 'device');
   YA.loaded();
   setInterval(() => {

@@ -1,0 +1,8 @@
+{
+  "name": "brainrot-kombat",
+  "productName": "Брейнрот Комбат",
+  "version": "1.0.0",
+  "description": "Пиксельный файтинг с фаталити",
+  "main": "main.js",
+  "private": true
+}
